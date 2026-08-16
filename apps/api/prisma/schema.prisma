@@ -1,0 +1,707 @@
+// CareLoop Database Schema (PostgreSQL)
+// Ref: docs/DATABASE.md
+// Konvensi: timestamptz (UTC), enum string, id uuid, kolom waktu diakhiri _at
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- enums
+
+enum UserRole {
+  PATIENT
+  FAMILY
+  NAKES
+  ADMIN
+}
+
+enum LivingSituation {
+  ALONE
+  WITH_FAMILY
+  FAR_FROM_FAMILY
+  OTHER
+}
+
+enum Gender {
+  M
+  F
+}
+
+enum EmergencyPreference {
+  FAMILY_FIRST
+  NAKES_FIRST
+}
+
+enum ComplianceStatus {
+  PENDING
+  CONFIRMED
+  CONFIRMED_LATE
+  MISSED
+  TUNDA
+}
+
+enum VitalSource {
+  GOOGLE_FIT
+  HEALTHKIT
+  MOCK
+}
+
+enum EmergencyStatus {
+  PENDING_PATIENT_CONFIRM
+  ESCALATING
+  RESOLVED_SAFE
+  HANDLED
+  TIMED_OUT
+}
+
+enum EmergencyTrigger {
+  ANOMALY_HR
+  NO_RESPONSE_MED
+  OTHER
+}
+
+enum EscalationContext {
+  SCHEDULE
+  EMERGENCY
+}
+
+enum EscalationRunStatus {
+  WAITING_PATIENT
+  FAMILY_TIER_1
+  FAMILY_TIER_2
+  NAKES
+  HANDLED
+  RESOLVED
+  TIMED_OUT
+}
+
+enum EscalationTier {
+  TIER_1
+  TIER_2
+}
+
+enum ResolutionType {
+  PATIENT_CONFIRMED
+  FAMILY_HANDLED
+  NAKES_HANDLED
+  TIMEOUT
+  CANCELLED
+}
+
+enum Relationship {
+  ANAK
+  PASANGAN
+  SAUDARA
+  CUCU
+  TETANGGA
+  KEPONAKAN
+  LAINNYA
+}
+
+enum FamilyTier {
+  TIER_1
+  TIER_2
+}
+
+enum NakesRole {
+  DOKTER
+  PERAWAT
+  BIDAN
+  KADER
+  LAINNYA
+}
+
+enum Channel {
+  WHATSAPP
+  PUSH
+  WEBSOCKET
+  SMS
+  IN_APP
+  VOICE
+}
+
+enum NotificationType {
+  REMINDER
+  ESCALATION
+  EMERGENCY
+  REFILL
+  EDUCATION
+  SKRINING
+  RISK_UPDATE
+  OTHER
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  RETRYING
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ExportStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum FacilityType {
+  PUSKESMAS
+  PUSKESMAS_PEMBANTU
+  RUMAH_SAKIT
+  KLINIK
+  APOTEK
+}
+
+enum ScreeningType {
+  DIABETES_RISK
+  HYPERTENSION
+  GENERAL
+}
+
+enum ScreeningStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum ReminderChannel {
+  WHATSAPP
+  PUSH
+  VOICE
+}
+
+enum ReminderStatus {
+  SENT
+  FAILED
+  RETRYING
+}
+
+enum MessageDirection {
+  IN
+  OUT
+}
+
+enum MedicalForm {
+  TABLET
+  KAPSUL
+  SIRUP
+  INJEKSI
+  LAINNYA
+}
+
+enum EscalationStepResponse {
+  ACK_HANDLE
+  ACK_LOOKING
+  NONE
+}
+
+enum NakesScopeType {
+  PUSKESMAS
+  DISTRICT
+  ALL
+}
+
+// ---------------------------------------------------------------- akun & profil
+
+model User {
+  id           String   @id @default(uuid())
+  phone        String   @unique
+  email        String?  @unique
+  passwordHash String?
+  fullName     String
+  role         UserRole
+  language     String   @default("id")
+  timezone     String   @default("Asia/Jakarta")
+  isActive     Boolean  @default(true)
+  isVerified   Boolean  @default(false)
+  consentPdpAt DateTime? @db.Timestamptz
+  createdAt    DateTime @default(now()) @db.Timestamptz
+  updatedAt    DateTime @updatedAt @db.Timestamptz
+
+  patient           Patient?
+  familyContacts    FamilyContact[]
+  nakesContacts     NakesContact[]
+  nakesAssignments  NakesAssignment[]
+  handledRuns       EscalationRun[]     @relation("EscalationHandledBy")
+  emergencyResolved EmergencyAlert[]    @relation("EmergencyResolvedBy")
+  escalationSteps   EscalationStep[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  exportJobs        ExportJob[]
+  screenings        Screening[]
+}
+
+model Patient {
+  id                    String              @id
+  userId                String              @unique
+  user                  User                @relation(fields: [userId], references: [id])
+  nik                   String?             @unique
+  dateOfBirth           DateTime?           @db.Date
+  gender                Gender?
+  address               String?
+  districtCode          String?
+  city                  String?
+  province              String?
+  livingSituation       LivingSituation     @default(WITH_FAMILY)
+  hasNearbyFamily       Boolean             @default(true)
+  emergencyPreference   EmergencyPreference @default(FAMILY_FIRST)
+  healthConditions      String[]
+  bpjsNumber            String?
+  smartwatchEnabled     Boolean             @default(false)
+  voiceEnabled          Boolean             @default(false)
+  devicePushToken       String?
+  lastKnownLat          Decimal?            @db.Decimal(10, 7)
+  lastKnownLng          Decimal?            @db.Decimal(10, 7)
+  lastLocationAt        DateTime?           @db.Timestamptz
+  riskScore             Int?
+  riskLevel             RiskLevel?
+  consentShareWithNakes Boolean             @default(false)
+  createdAt             DateTime            @default(now()) @db.Timestamptz
+  updatedAt             DateTime            @updatedAt @db.Timestamptz
+
+  medications       Medication[]
+  schedules         Schedule[]
+  stocks            MedicationStock[]
+  complianceLogs    ComplianceLog[]
+  vitalSigns        VitalSign[]
+  emergencyAlerts   EmergencyAlert[]
+  escalationRuns    EscalationRun[]
+  familyContacts    FamilyContact[]
+  nakesContacts     NakesContact[]
+  notifications     Notification[]
+  reminderLogs      ReminderLog[]
+  screenings        Screening[]
+  riskPredictions   RiskPrediction[]
+  chatbotSessions   ChatbotSession[]
+  auditLogs         AuditLog[]
+
+  @@index([districtCode])
+  @@index([riskLevel, updatedAt(sort: Desc)])
+}
+
+model Puskesmas {
+  id           String   @id @default(uuid())
+  name         String
+  type         FacilityType @default(PUSKESMAS)
+  districtCode String?
+  address      String?
+  phone        String?
+  lat          Decimal? @db.Decimal(10, 7)
+  lng          Decimal? @db.Decimal(10, 7)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz
+  updatedAt    DateTime @updatedAt @db.Timestamptz
+
+  nakesContacts  NakesContact[]
+  nakesAssignments NakesAssignment[]
+}
+
+model Facility {
+  id        String       @id @default(uuid())
+  name      String
+  type      FacilityType
+  districtCode String?
+  address   String?
+  phone     String?
+  lat       Decimal?     @db.Decimal(10, 7)
+  lng       Decimal?     @db.Decimal(10, 7)
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now()) @db.Timestamptz
+
+  @@index([type])
+}
+
+model NakesAssignment {
+  id            String         @id @default(uuid())
+  nakesUserId   String
+  nakesUser     User           @relation(fields: [nakesUserId], references: [id])
+  puskesmasId   String?
+  puskesmas     Puskesmas?     @relation(fields: [puskesmasId], references: [id])
+  districtCode  String?
+  scopeType     NakesScopeType @default(PUSKESMAS)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now()) @db.Timestamptz
+
+  @@unique([nakesUserId, puskesmasId, districtCode])
+}
+
+model NakesContact {
+  id           String    @id @default(uuid())
+  patientId    String
+  patient      Patient   @relation(fields: [patientId], references: [id])
+  nakesUserId  String?
+  nakesUser    User?     @relation(fields: [nakesUserId], references: [id])
+  nakesName    String
+  nakesRole    NakesRole @default(LAINNYA)
+  phone        String
+  puskesmasId  String?
+  puskesmas    Puskesmas? @relation(fields: [puskesmasId], references: [id])
+  isPrimary    Boolean   @default(false)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now()) @db.Timestamptz
+
+  @@index([patientId, isActive])
+}
+
+model FamilyContact {
+  id                  String       @id @default(uuid())
+  patientId           String
+  patient             Patient      @relation(fields: [patientId], references: [id])
+  userId              String?
+  user                User?        @relation(fields: [userId], references: [id])
+  name                String
+  phone               String
+  relationship        Relationship
+  tier                FamilyTier
+  priority            Int          @default(1)
+  isNearby            Boolean      @default(false)
+  canViewHealth       Boolean      @default(false)
+  canReceiveEmergency Boolean      @default(true)
+  isActive            Boolean      @default(true)
+  createdAt           DateTime     @default(now()) @db.Timestamptz
+  updatedAt           DateTime     @updatedAt @db.Timestamptz
+
+  @@unique([patientId, phone])
+  @@index([patientId, isActive, tier, priority])
+}
+
+// ---------------------------------------------------------------- obat & jadwal
+
+model Medication {
+  id           String      @id @default(uuid())
+  patientId    String
+  patient      Patient     @relation(fields: [patientId], references: [id])
+  name         String
+  genericName  String?
+  dosage       String?
+  form         MedicalForm @default(TABLET)
+  instructions String?
+  isActive     Boolean     @default(true)
+  startedAt    DateTime    @db.Date
+  endedAt      DateTime?   @db.Date
+  createdAt    DateTime    @default(now()) @db.Timestamptz
+  updatedAt    DateTime    @updatedAt @db.Timestamptz
+
+  schedules Schedule[]
+  stocks    MedicationStock[]
+  complianceLogs ComplianceLog[]
+}
+
+model Schedule {
+  id                String   @id @default(uuid())
+  patientId         String
+  patient           Patient  @relation(fields: [patientId], references: [id])
+  medicationId      String
+  medication        Medication @relation(fields: [medicationId], references: [id])
+  timeOfDay         String
+  daysOfWeek        Int[]
+  doseQty           String   @default("1 tablet")
+  startDate         DateTime @db.Date
+  endDate           DateTime? @db.Date
+  timeWindowMinutes Int      @default(30)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now()) @db.Timestamptz
+  updatedAt         DateTime @updatedAt @db.Timestamptz
+
+  complianceLogs ComplianceLog[]
+  reminderLogs   ReminderLog[]
+  escalationRuns EscalationRun[]
+
+  @@index([isActive, timeOfDay])
+  @@index([patientId])
+}
+
+model MedicationStock {
+  id                    String   @id @default(uuid())
+  patientId             String
+  patient               Patient  @relation(fields: [patientId], references: [id])
+  medicationId          String
+  medication            Medication @relation(fields: [medicationId], references: [id])
+  quantityRemaining     Int
+  lastRefillAt          DateTime @db.Timestamptz
+  refillReminderSentAt  DateTime? @db.Timestamptz
+  refillConfirmedAt     DateTime? @db.Timestamptz
+  createdAt             DateTime @default(now()) @db.Timestamptz
+  updatedAt             DateTime @updatedAt @db.Timestamptz
+
+  @@unique([patientId, medicationId])
+}
+
+// ---------------------------------------------------------------- kepatuhan & vital
+
+model ComplianceLog {
+  id               String           @id @default(uuid())
+  patientId        String
+  patient          Patient          @relation(fields: [patientId], references: [id])
+  scheduleId       String
+  schedule         Schedule         @relation(fields: [scheduleId], references: [id])
+  medicationId     String
+  medication       Medication       @relation(fields: [medicationId], references: [id])
+  scheduledAt      DateTime         @db.Timestamptz
+  confirmedAt      DateTime?        @db.Timestamptz
+  status           ComplianceStatus @default(PENDING)
+  channel          Channel          @default(WHATSAPP)
+  sourceMessageId  String?
+  notes            String?
+  createdAt        DateTime         @default(now()) @db.Timestamptz
+
+  @@index([patientId, scheduledAt(sort: Desc)])
+  @@index([scheduleId, scheduledAt])
+  @@index([status, scheduledAt])
+  @@unique([scheduleId, scheduledAt])
+}
+
+model VitalSign {
+  id            String      @id @default(uuid())
+  patientId     String
+  patient       Patient     @relation(fields: [patientId], references: [id])
+  recordedAt    DateTime    @db.Timestamptz
+  source        VitalSource
+  hrBpm         Int?
+  spo2          Int?
+  systolic      Int?
+  diastolic     Int?
+  isAnomalous   Boolean     @default(false)
+  anomalyReason String?
+  rawPayload    Json?
+  createdAt     DateTime    @default(now()) @db.Timestamptz
+
+  @@index([patientId, recordedAt(sort: Desc)])
+  @@index([isAnomalous, recordedAt])
+  @@unique([patientId, source, recordedAt])
+}
+
+// ---------------------------------------------------------------- darurat & eskalasi
+
+model EmergencyAlert {
+  id                       String          @id @default(uuid())
+  patientId                String
+  patient                  Patient         @relation(fields: [patientId], references: [id])
+  triggeredAt              DateTime        @db.Timestamptz
+  triggerType              EmergencyTrigger
+  hrBpm                    Int?
+  patientConfirmedSafe     Boolean?
+  patientConfirmedAt       DateTime?       @db.Timestamptz
+  escalationRun            EscalationRun?  @relation("EmergencySource")
+  locationLat              Decimal?        @db.Decimal(10, 7)
+  locationLng              Decimal?        @db.Decimal(10, 7)
+  status                   EmergencyStatus @default(PENDING_PATIENT_CONFIRM)
+  alertSentToFamilyAt      DateTime?       @db.Timestamptz
+  alertSentToNakesAt       DateTime?       @db.Timestamptz
+  resolvedAt               DateTime?       @db.Timestamptz
+  resolvedByUserId         String?
+  resolvedByUser           User?           @relation("EmergencyResolvedBy", fields: [resolvedByUserId], references: [id])
+  notes                    String?
+  createdAt                DateTime        @default(now()) @db.Timestamptz
+  updatedAt                DateTime        @updatedAt @db.Timestamptz
+
+  @@index([status, triggeredAt(sort: Desc)])
+  @@index([patientId, triggeredAt(sort: Desc)])
+}
+
+model EscalationRun {
+  id                String              @id @default(uuid())
+  patientId         String
+  patient           Patient             @relation(fields: [patientId], references: [id])
+  context           EscalationContext
+  sourceScheduleId  String?
+  schedule          Schedule?           @relation(fields: [sourceScheduleId], references: [id])
+  sourceEmergencyId String?             @unique
+  emergency         EmergencyAlert?     @relation("EmergencySource", fields: [sourceEmergencyId], references: [id])
+  status            EscalationRunStatus @default(WAITING_PATIENT)
+  currentTier       EscalationTier?
+  startedAt         DateTime            @default(now()) @db.Timestamptz
+  resolvedAt        DateTime?           @db.Timestamptz
+  resolvedByUserId  String?
+  resolvedByUser    User?               @relation("EscalationHandledBy", fields: [resolvedByUserId], references: [id])
+  resolutionType    ResolutionType?
+  configSnapshot    Json?
+  createdAt         DateTime            @default(now()) @db.Timestamptz
+  updatedAt         DateTime            @updatedAt @db.Timestamptz
+
+  steps EscalationStep[]
+
+  @@index([status])
+  @@index([patientId, startedAt(sort: Desc)])
+}
+
+model EscalationStep {
+  id                 String                @id @default(uuid())
+  runId              String
+  run                EscalationRun         @relation(fields: [runId], references: [id])
+  tier               EscalationTier?
+  contactUserId      String?
+  contactUser        User?                 @relation(fields: [contactUserId], references: [id])
+  contactPhone       String
+  channel            Channel
+  messageKey         String
+  sentAt             DateTime?             @db.Timestamptz
+  deliveredAt        DateTime?             @db.Timestamptz
+  readAt             DateTime?             @db.Timestamptz
+  respondedAt        DateTime?             @db.Timestamptz
+  response           EscalationStepResponse @default(NONE)
+  providerMessageId  String?
+  error              String?
+  createdAt          DateTime              @default(now()) @db.Timestamptz
+
+  @@index([runId])
+}
+
+// ---------------------------------------------------------------- notifikasi & log
+
+model Notification {
+  id                 String             @id @default(uuid())
+  userId             String?
+  user               User?              @relation(fields: [userId], references: [id])
+  patientId          String?
+  patient            Patient?           @relation(fields: [patientId], references: [id])
+  channel            Channel
+  type               NotificationType
+  title              String
+  body               String
+  payload            Json?
+  providerMessageId  String?
+  status             NotificationStatus @default(PENDING)
+  error              String?
+  sentAt             DateTime?          @db.Timestamptz
+  deliveredAt        DateTime?          @db.Timestamptz
+  readAt             DateTime?          @db.Timestamptz
+  createdAt          DateTime           @default(now()) @db.Timestamptz
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([patientId, createdAt(sort: Desc)])
+}
+
+model ReminderLog {
+  id                 String         @id @default(uuid())
+  scheduleId         String
+  schedule           Schedule       @relation(fields: [scheduleId], references: [id])
+  patientId          String
+  patient            Patient        @relation(fields: [patientId], references: [id])
+  scheduledFireAt    DateTime       @db.Timestamptz
+  actualFireAt       DateTime       @db.Timestamptz
+  channel            ReminderChannel
+  status             ReminderStatus @default(SENT)
+  attempt            Int            @default(1)
+  providerMessageId  String?
+  error              String?
+  createdAt          DateTime       @default(now()) @db.Timestamptz
+
+  @@index([scheduleId, scheduledFireAt])
+  @@index([patientId, scheduledFireAt(sort: Desc)])
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  actorUserId   String?
+  actorUser     User?    @relation(fields: [actorUserId], references: [id])
+  actorRole     UserRole?
+  action        String
+  resourceType  String?
+  resourceId    String?
+  patientId     String?
+  patient       Patient? @relation(fields: [patientId], references: [id])
+  ip            String?
+  userAgent     String?
+  meta          Json?
+  createdAt     DateTime @default(now()) @db.Timestamptz
+
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@index([patientId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+}
+
+model ExportJob {
+  id           String       @id @default(uuid())
+  requestedBy  String
+  requester    User         @relation(fields: [requestedBy], references: [id])
+  params       Json
+  status       ExportStatus @default(PENDING)
+  fileUrl      String?
+  rowCount     Int?
+  createdAt    DateTime     @default(now()) @db.Timestamptz
+  completedAt  DateTime?    @db.Timestamptz
+}
+
+// ---------------------------------------------------------------- edukasi & skrining
+
+model Screening {
+  id            String          @id @default(uuid())
+  patientId     String
+  patient       Patient         @relation(fields: [patientId], references: [id])
+  userId        String?
+  user          User?           @relation(fields: [userId], references: [id])
+  screeningType ScreeningType
+  startedAt     DateTime        @default(now()) @db.Timestamptz
+  completedAt   DateTime?       @db.Timestamptz
+  totalScore    Int?
+  level         RiskLevel?
+  status        ScreeningStatus @default(IN_PROGRESS)
+
+  answers ScreeningAnswer[]
+
+  @@index([patientId, startedAt(sort: Desc)])
+}
+
+model ScreeningAnswer {
+  id          String   @id @default(uuid())
+  screeningId String
+  screening   Screening @relation(fields: [screeningId], references: [id])
+  questionKey String
+  answerValue String
+  answeredAt  DateTime @default(now()) @db.Timestamptz
+
+  @@index([screeningId])
+}
+
+model RiskPrediction {
+  id        String    @id @default(uuid())
+  patientId String
+  patient   Patient   @relation(fields: [patientId], references: [id])
+  computedOn DateTime @db.Date
+  score     Int
+  level     RiskLevel
+  factors   Json?
+  createdAt DateTime  @default(now()) @db.Timestamptz
+
+  @@index([patientId, computedOn(sort: Desc)])
+}
+
+model ChatbotSession {
+  id             String   @id @default(uuid())
+  patientId      String
+  patient        Patient  @relation(fields: [patientId], references: [id])
+  startedAt      DateTime @default(now()) @db.Timestamptz
+  lastActivityAt DateTime @default(now()) @db.Timestamptz
+  closedAt       DateTime? @db.Timestamptz
+
+  messages ChatbotMessage[]
+
+  @@index([patientId, startedAt(sort: Desc)])
+}
+
+model ChatbotMessage {
+  id        String           @id @default(uuid())
+  sessionId String
+  session   ChatbotSession   @relation(fields: [sessionId], references: [id])
+  direction MessageDirection
+  message   String
+  intent    String?
+  createdAt DateTime         @default(now()) @db.Timestamptz
+
+  @@index([sessionId, createdAt])
+}

@@ -1,0 +1,41 @@
+{
+  "name": "careloop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CareLoop - Ekosistem kepatuhan pengobatan & deteksi darurat (SDG 3 Digital Health)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@11.17.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:api": "npm run dev -w @careloop/api",
+    "dev:web": "npm run dev -w @careloop/web",
+    "dev:mobile": "npm run start -w @careloop/mobile",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:migrate": "npm run db:migrate -w @careloop/api",
+    "db:generate": "npm run db:generate -w @careloop/api",
+    "db:seed": "npm run db:seed -w @careloop/api"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "turbo": "^2.3.3",
+    "typescript": "^5.6.3"
+  },
+  "allowScripts": {
+    "prisma@5.22.0": true,
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "esbuild@0.27.7": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true,
+    "unrs-resolver@1.12.2": true
+  }
+}
