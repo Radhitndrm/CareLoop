@@ -1,6 +1,6 @@
 // CL-005: env terpusat harus menolak konfigurasi tidak valid dengan pesan jelas.
-import { describe, expect, it } from 'vitest'
-import { EnvValidationError, parseEnv } from './env'
+import { afterEach, describe, expect, it } from 'vitest'
+import { EnvValidationError, getEnv, parseEnv, resetEnvCache } from './env'
 
 const VALID = {
   DATABASE_URL: 'postgresql://careloop:careloop@localhost:5432/careloop?schema=public',
@@ -114,5 +114,32 @@ describe('parseEnv — env invalid ditolak dengan pesan jelas', () => {
       expect((err as Error).message).toContain('DATABASE_URL')
       expect((err as Error).message).toContain('JWT_SECRET')
     }
+  })
+})
+
+// Regresi CI: modul ini pernah memanggil process.exit(1) saat di-import, sehingga
+// suite mati di runner yang tidak punya .env. Import harus bebas efek samping.
+describe('getEnv — tanpa efek samping saat import', () => {
+  const saved = { ...process.env }
+
+  afterEach(() => {
+    process.env = { ...saved }
+    resetEnvCache()
+  })
+
+  it('melempar EnvValidationError (bukan mematikan proses) saat env kosong', () => {
+    resetEnvCache()
+    delete process.env.DATABASE_URL
+    delete process.env.JWT_SECRET
+
+    expect(() => getEnv()).toThrow(EnvValidationError)
+  })
+
+  it('mengembalikan env yang sama pada pemanggilan berikutnya (cache)', () => {
+    resetEnvCache()
+    process.env.DATABASE_URL = VALID.DATABASE_URL
+    process.env.JWT_SECRET = VALID.JWT_SECRET
+
+    expect(getEnv()).toBe(getEnv())
   })
 })

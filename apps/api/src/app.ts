@@ -4,7 +4,7 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import rateLimit from '@fastify/rate-limit'
-import { env } from './lib/env'
+import { getEnv } from './lib/env'
 import { registerErrorHandler } from './lib/errors'
 import { registerRoutes } from './routes'
 
@@ -16,6 +16,8 @@ export interface BuildAppOptions {
 }
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
+  const env = getEnv()
+
   const app: FastifyInstance = Fastify({
     logger: opts.logger ?? true,
     requestIdHeader: 'x-request-id',

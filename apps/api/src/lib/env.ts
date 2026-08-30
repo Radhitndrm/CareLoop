@@ -133,30 +133,48 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
   )
 }
 
-function loadEnv(): Env {
-  try {
-    return parseEnv()
-  } catch (err) {
-    console.error(err instanceof Error ? err.message : err)
-    console.error('Periksa apps/api/.env — contoh lengkap ada di apps/api/.env.example')
-    process.exit(1)
+let cached: Env | undefined
+
+/**
+ * Env yang sudah tervalidasi, di-cache setelah pemanggilan pertama.
+ * Sengaja **tidak** dievaluasi saat modul di-import: meng-import modul ini tidak
+ * boleh punya efek samping, supaya test bisa memakai parseEnv() tanpa .env lengkap.
+ * Kegagalan dilaporkan sebagai throw; bootstrap (src/index.ts) yang memutuskan exit.
+ */
+export function getEnv(): Env {
+  cached ??= parseEnv()
+  return cached
+}
+
+/** Membuang cache — dipakai test yang mengubah process.env. */
+export function resetEnvCache(): void {
+  cached = undefined
+}
+
+/** Timeout state machine eskalasi dalam milidetik (scheduler memakai ms). */
+export function escalationTimeoutsMs(): {
+  waitingPatient: number
+  familyTier1: number
+  familyTier2: number
+  nakes: number
+  emergencyPatientConfirm: number
+} {
+  const env = getEnv()
+  return {
+    waitingPatient: env.ESCALATION_PATIENT_WAIT_SEC * 1000,
+    familyTier1: env.ESCALATION_FAMILY_TIER1_WAIT_SEC * 1000,
+    familyTier2: env.ESCALATION_FAMILY_TIER2_WAIT_SEC * 1000,
+    nakes: env.ESCALATION_NAKES_WAIT_SEC * 1000,
+    emergencyPatientConfirm: env.EMERGENCY_PATIENT_CONFIRM_SEC * 1000,
   }
 }
 
-export const env = loadEnv()
-
-/** Timeout state machine eskalasi dalam milidetik (scheduler memakai ms). */
-export const escalationTimeoutsMs = {
-  waitingPatient: env.ESCALATION_PATIENT_WAIT_SEC * 1000,
-  familyTier1: env.ESCALATION_FAMILY_TIER1_WAIT_SEC * 1000,
-  familyTier2: env.ESCALATION_FAMILY_TIER2_WAIT_SEC * 1000,
-  nakes: env.ESCALATION_NAKES_WAIT_SEC * 1000,
-  emergencyPatientConfirm: env.EMERGENCY_PATIENT_CONFIRM_SEC * 1000,
-} as const
-
 /** Konfigurasi aturan anomali HR untuk evaluateAnomaly(). */
-export const anomalyRuleConfig = {
-  minHr: env.ANOMALY_HR_MIN,
-  maxHr: env.ANOMALY_HR_MAX,
-  windowMs: env.ANOMALY_WINDOW_SEC * 1000,
-} as const
+export function anomalyRuleConfig(): { minHr: number; maxHr: number; windowMs: number } {
+  const env = getEnv()
+  return {
+    minHr: env.ANOMALY_HR_MIN,
+    maxHr: env.ANOMALY_HR_MAX,
+    windowMs: env.ANOMALY_WINDOW_SEC * 1000,
+  }
+}

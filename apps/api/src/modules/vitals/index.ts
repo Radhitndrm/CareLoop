@@ -9,7 +9,7 @@ export function registerVitalsRoutes(app: FastifyInstance): void {
 
     const result = evaluateAnomaly(
       input.hrBpm !== undefined ? [{ recordedAt: new Date(input.recordedAt), hrBpm: input.hrBpm }] : [],
-      anomalyRuleConfig,
+      anomalyRuleConfig(),
     )
 
     return reply.code(200).send({
