@@ -448,6 +448,17 @@ Relasi nakes ↔ puskesmas/wilayah (scope dashboard).
 - `medication_stocks(patient_id, medication_id)` unique.
 - `nakes_assignments` unique per (nakes_user_id, scope target).
 
+**Guard idempotency di migrasi `init` (CL-002).** Prisma belum bisa mendeklarasikan partial unique index, jadi keempatnya ditulis sebagai raw SQL di akhir `apps/api/prisma/migrations/*_init/migration.sql`:
+
+| Index | Tabel (kolom) | Kondisi partial | Fungsi |
+|---|---|---|---|
+| `EscalationRun_active_patient_context_key` | EscalationRun (patientId, context) | `status NOT IN ('HANDLED','RESOLVED','TIMED_OUT')` | Satu run aktif per (pasien, context) |
+| `ComplianceLog_sourceMessageId_key` | ComplianceLog (sourceMessageId) | `IS NOT NULL` | Dedup pesan masuk WhatsApp |
+| `EscalationStep_providerMessageId_key` | EscalationStep (providerMessageId) | `IS NOT NULL` | Dedup callback status WhatsApp |
+| `Notification_providerMessageId_key` | Notification (providerMessageId) | `IS NOT NULL` | Dedup notifikasi keluar |
+
+Dedup event smartwatch memakai unique biasa `VitalSign(patientId, source, recordedAt)` (TESTING AN-6).
+
 ---
 
 ## 5. Indexing Strategy
