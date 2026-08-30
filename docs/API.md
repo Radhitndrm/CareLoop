@@ -59,6 +59,22 @@
 6. Semua error tidak boleh membocorkan detail internal/stack trace ke client.
 7. Unknown error → `500` + `code: INTERNAL_ERROR` (detail ke log saja).
 
+**Katalog kode error** (stabil — `apps/api/src/lib/errors.ts`, dipasang terpusat di `app.ts`):
+
+| Kode | HTTP | Dipicu oleh |
+|---|---|---|
+| `VALIDATION_ERROR` | 400 | `ZodError` (details = array `{ field, reason }`), `PrismaClientValidationError` |
+| `UNAUTHORIZED` | 401 | Token hilang/kedaluwarsa |
+| `FORBIDDEN` | 403 | Di luar scope RBAC |
+| `NOT_FOUND` | 404 | Resource tidak ada, Prisma `P2025`, route tak dikenal |
+| `CONFLICT` | 409 | Bentrok relasi (Prisma `P2003`) |
+| `ALREADY_PROCESSED` | 409 | Duplikat idempotency, Prisma `P2002` (details = `{ target }`) |
+| `INVALID_TRANSITION` | 422 | State machine menolak transisi |
+| `RATE_LIMITED` | 429 | Rate limit (header `Retry-After`) |
+| `INTERNAL_ERROR` | 500 | Error tak terduga — pesan generik, stack hanya ke log |
+
+Controller **tidak** menangkap error sendiri: lempar helper dari `lib/errors.ts` (`notFound()`, `alreadyProcessed()`, `invalidTransition()`, …) atau biarkan Zod/Prisma melempar.
+
 ---
 
 ## 2. Autentikasi
