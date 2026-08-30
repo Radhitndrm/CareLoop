@@ -12,6 +12,7 @@ export interface BuildAppOptions {
   logger?: boolean
   jwtSecret?: string
   rateLimitMax?: number
+  corsOrigins?: string[]
 }
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -21,14 +22,16 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     genReqId: () => randomUUID(),
   })
 
-  // TODO(security): ganti `origin: true` dengan whitelist domain Vercel (lihat docs/SECURITY.md)
-  await app.register(cors, { origin: true })
+  // Whitelist domain frontend dari CORS_ORIGINS; kosong hanya boleh di luar production
+  // (env.ts menolak startup production tanpa whitelist). Lihat docs/SECURITY.md.
+  const corsOrigins = opts.corsOrigins ?? env.CORS_ORIGINS
+  await app.register(cors, { origin: corsOrigins.length > 0 ? corsOrigins : true })
 
   await app.register(jwt, { secret: opts.jwtSecret ?? env.JWT_SECRET })
 
   await app.register(rateLimit, {
-    max: opts.rateLimitMax ?? 120,
-    timeWindow: '1 minute',
+    max: opts.rateLimitMax ?? env.RATE_LIMIT_MAX,
+    timeWindow: env.RATE_LIMIT_WINDOW,
   })
 
   registerErrorHandler(app)
