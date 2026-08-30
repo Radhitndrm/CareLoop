@@ -5,6 +5,7 @@ import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import rateLimit from '@fastify/rate-limit'
 import { env } from './lib/env'
+import { registerErrorHandler } from './lib/errors'
 import { registerRoutes } from './routes'
 
 export interface BuildAppOptions {
@@ -29,6 +30,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     max: opts.rateLimitMax ?? 120,
     timeWindow: '1 minute',
   })
+
+  registerErrorHandler(app)
 
   app.get('/healthz', async () => ({
     status: 'ok',
