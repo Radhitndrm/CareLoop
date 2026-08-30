@@ -1,14 +1,26 @@
 import { z } from 'zod'
-import { EscalationEventType } from '../enums'
+import {
+  ComplianceChannel,
+  EscalationEventType,
+  ExportStatus,
+  FacilityType,
+  Relationship,
+  RiskLevel,
+  VitalSource,
+  FamilyTier,
+} from '../enums'
+
+/** Semua id domain adalah uuid v4 (docs/DATABASE.md §1) — termasuk data seed. */
+export const uuidSchema = z.string().uuid()
 
 export const complianceConfirmSchema = z.object({
-  scheduleId: z.string().uuid(),
-  channel: z.enum(['MOBILE_APP', 'WHATSAPP']).default('MOBILE_APP'),
+  scheduleId: uuidSchema,
+  channel: z.nativeEnum(ComplianceChannel).default(ComplianceChannel.IN_APP),
 })
 export type ComplianceConfirmInput = z.infer<typeof complianceConfirmSchema>
 
 export const complianceDeferSchema = z.object({
-  scheduleId: z.string().uuid(),
+  scheduleId: uuidSchema,
   minutes: z.number().int().min(5).max(120).default(15),
 })
 export type ComplianceDeferInput = z.infer<typeof complianceDeferSchema>
@@ -29,16 +41,8 @@ export const escalationEventSchema = z.nativeEnum(EscalationEventType)
 export const createFamilyContactSchema = z.object({
   name: z.string().min(2).max(120),
   phone: z.string().regex(/^08\d{8,13}$/, 'Nomor HP harus format Indonesia (08...)'),
-  relationship: z.enum([
-    'ANAK',
-    'PASANGAN',
-    'SAUDARA',
-    'CUCU',
-    'TETANGGA',
-    'KEPONAKAN',
-    'LAINNYA',
-  ]),
-  tier: z.enum(['TIER_1', 'TIER_2']),
+  relationship: z.nativeEnum(Relationship),
+  tier: z.nativeEnum(FamilyTier),
   priority: z.number().int().min(1).max(99).default(1),
   isNearby: z.boolean().default(false),
   canViewHealth: z.boolean().default(false),
@@ -47,9 +51,11 @@ export const createFamilyContactSchema = z.object({
 export type CreateFamilyContactInput = z.infer<typeof createFamilyContactSchema>
 
 export const createScheduleSchema = z.object({
-  medicationId: z.string().uuid(),
+  medicationId: uuidSchema,
   timeOfDay: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format HH:mm'),
-  daysOfWeek: z.array(z.number().int().min(1).max(7)).max(7).optional(),
+  /** ISO 1=Senin..7=Minggu. Array kosong / tidak diisi = setiap hari. */
+  daysOfWeek: z.array(z.number().int().min(1).max(7)).max(7).default([]),
+  dailyFrequency: z.number().int().min(1).max(6).default(1),
   doseQty: z.string().min(1).max(30),
   startDate: z.string().date(),
   timeWindowMinutes: z.number().int().min(5).max(240).default(30),
@@ -58,9 +64,9 @@ export const createScheduleSchema = z.object({
 export type CreateScheduleInput = z.infer<typeof createScheduleSchema>
 
 export const vitalIngestSchema = z.object({
-  patientId: z.string().uuid(),
+  patientId: uuidSchema,
   recordedAt: z.string().datetime(),
-  source: z.enum(['GOOGLE_FIT', 'HEALTHKIT', 'MOCK']),
+  source: z.nativeEnum(VitalSource),
   hrBpm: z.number().int().min(20).max(240).optional(),
   spo2: z.number().int().min(50).max(100).optional(),
   systolic: z.number().int().min(50).max(260).optional(),
@@ -82,18 +88,20 @@ export const exportJobSchema = z.object({
 })
 export type ExportJobInput = z.infer<typeof exportJobSchema>
 
+export const exportStatusSchema = z.nativeEnum(ExportStatus)
+
 export const nearbyFacilityQuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
   radius: z.coerce.number().int().min(1).max(50).default(10),
-  type: z.enum(['PUSKESMAS', 'PUSKESMAS_PEMBANTU', 'RUMAH_SAKIT', 'KLINIK', 'APOTEK']).optional(),
+  type: z.nativeEnum(FacilityType).optional(),
 })
 export type NearbyFacilityQuery = z.infer<typeof nearbyFacilityQuerySchema>
 
 export const riskPatientFilterSchema = z.object({
   district: z.string().optional(),
   disease: z.string().optional(),
-  riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+  riskLevel: z.nativeEnum(RiskLevel).optional(),
   from: z.string().date().optional(),
   to: z.string().date().optional(),
 })

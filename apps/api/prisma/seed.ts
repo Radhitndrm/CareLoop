@@ -1,18 +1,33 @@
 // Seed data sintetis untuk demo (data fiktif — UU PDP: tanpa data pasien riil).
 // Jalankan: npm run db:seed -w @careloop/api
 import { PrismaClient } from '@prisma/client'
-import { fakerID_ID as faker } from '@faker-js/faker'
 
 const prisma = new PrismaClient()
+
+// UUID v4 statis supaya seed idempoten dan tetap lolos validator z.string().uuid()
+// (docs/DATABASE.md §1: semua id uuid). Nilai sengaja dibuat berpola agar jelas sintetis.
+const ID = {
+  puskesmasUmbulharjo: '00000000-0000-4000-8000-000000000001',
+  userNakesDewi: '00000000-0000-4000-8000-000000000002',
+  userBuRatna: '00000000-0000-4000-8000-000000000003',
+  userAri: '00000000-0000-4000-8000-000000000004',
+  userPakHaji: '00000000-0000-4000-8000-000000000005',
+  userSari: '00000000-0000-4000-8000-000000000006',
+  nakesContactKaderNuning: '00000000-0000-4000-8000-000000000101',
+  medicationMetformin: '00000000-0000-4000-8000-000000000201',
+  medicationAmlodipine: '00000000-0000-4000-8000-000000000202',
+  scheduleMetforminPagi: '00000000-0000-4000-8000-000000000301',
+  scheduleAmlodipinePagi: '00000000-0000-4000-8000-000000000302',
+} as const
 
 async function main(): Promise<void> {
   console.log('Seeding data sintetis CareLoop...')
 
   const puskesmas = await prisma.puskesmas.upsert({
-    where: { id: 'psk_umbulharjo' },
+    where: { id: ID.puskesmasUmbulharjo },
     update: {},
     create: {
-      id: 'psk_umbulharjo',
+      id: ID.puskesmasUmbulharjo,
       name: 'Puskesmas Umbulharjo',
       type: 'PUSKESMAS',
       districtCode: '3471',
@@ -29,7 +44,7 @@ async function main(): Promise<void> {
     where: { phone: '081100000001' },
     update: {},
     create: {
-      id: 'u_nakes_dewi',
+      id: ID.userNakesDewi,
       phone: '081100000001',
       fullName: 'dr. Dewi Lestari',
       role: 'NAKES',
@@ -53,7 +68,7 @@ async function main(): Promise<void> {
     where: { phone: '081200000001' },
     update: {},
     create: {
-      id: 'u_buratna',
+      id: ID.userBuRatna,
       phone: '081200000001',
       fullName: 'Ratna Wijaya',
       role: 'PATIENT',
@@ -62,12 +77,12 @@ async function main(): Promise<void> {
     },
   })
 
-  await prisma.patient.upsert({
-    where: { id: 'p_buratna' },
+  // patients.id = users.id (relasi 1:1, docs/DATABASE.md §3.2)
+  const buRatna = await prisma.patient.upsert({
+    where: { id: buRatnaUser.id },
     update: {},
     create: {
-      id: 'p_buratna',
-      userId: buRatnaUser.id,
+      id: buRatnaUser.id,
       dateOfBirth: new Date('1954-03-12'),
       gender: 'F',
       districtCode: '3471',
@@ -85,11 +100,11 @@ async function main(): Promise<void> {
   })
 
   // Keluarga: Ari (anak, Tier 2 — jauh)
-  await prisma.user.upsert({
+  const ariUser = await prisma.user.upsert({
     where: { phone: '081300000001' },
     update: {},
     create: {
-      id: 'u_ari',
+      id: ID.userAri,
       phone: '081300000001',
       fullName: 'Ari Prasetyo',
       role: 'FAMILY',
@@ -98,11 +113,11 @@ async function main(): Promise<void> {
     },
   })
   await prisma.familyContact.upsert({
-    where: { patientId_phone: { patientId: 'p_buratna', phone: '081300000001' } },
+    where: { patientId_phone: { patientId: buRatna.id, phone: '081300000001' } },
     update: {},
     create: {
-      patientId: 'p_buratna',
-      userId: 'u_ari',
+      patientId: buRatna.id,
+      userId: ariUser.id,
       name: 'Ari Prasetyo',
       phone: '081300000001',
       relationship: 'ANAK',
@@ -116,11 +131,11 @@ async function main(): Promise<void> {
 
   // Nakes contact: kader Nuning (jalur cadangan untuk pasien ALONE)
   await prisma.nakesContact.upsert({
-    where: { id: 'nc_kader_nuning' },
+    where: { id: ID.nakesContactKaderNuning },
     update: {},
     create: {
-      id: 'nc_kader_nuning',
-      patientId: 'p_buratna',
+      id: ID.nakesContactKaderNuning,
+      patientId: buRatna.id,
       nakesUserId: nakes.id,
       nakesName: 'Nuning (Kader Posyandu)',
       nakesRole: 'KADER',
@@ -132,11 +147,11 @@ async function main(): Promise<void> {
 
   // Obat & jadwal
   const metformin = await prisma.medication.upsert({
-    where: { id: 'med_metformin' },
+    where: { id: ID.medicationMetformin },
     update: {},
     create: {
-      id: 'med_metformin',
-      patientId: 'p_buratna',
+      id: ID.medicationMetformin,
+      patientId: buRatna.id,
       name: 'Metformin',
       dosage: '500 mg',
       form: 'TABLET',
@@ -146,14 +161,15 @@ async function main(): Promise<void> {
   })
 
   await prisma.schedule.upsert({
-    where: { id: 'sch_metformin_pagi' },
+    where: { id: ID.scheduleMetforminPagi },
     update: {},
     create: {
-      id: 'sch_metformin_pagi',
-      patientId: 'p_buratna',
+      id: ID.scheduleMetforminPagi,
+      patientId: buRatna.id,
       medicationId: metformin.id,
       timeOfDay: '08:00',
       daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+      dailyFrequency: 1,
       doseQty: '1 tablet',
       startDate: new Date('2026-07-01'),
       timeWindowMinutes: 30,
@@ -161,10 +177,10 @@ async function main(): Promise<void> {
   })
 
   await prisma.medicationStock.upsert({
-    where: { patientId_medicationId: { patientId: 'p_buratna', medicationId: metformin.id } },
+    where: { patientId_medicationId: { patientId: buRatna.id, medicationId: metformin.id } },
     update: {},
     create: {
-      patientId: 'p_buratna',
+      patientId: buRatna.id,
       medicationId: metformin.id,
       quantityRemaining: 7,
       lastRefillAt: new Date('2026-08-09'),
@@ -176,19 +192,18 @@ async function main(): Promise<void> {
     where: { phone: '081200000002' },
     update: {},
     create: {
-      id: 'u_pakhaji',
+      id: ID.userPakHaji,
       phone: '081200000002',
       fullName: 'H. Ahmad Subagio',
       role: 'PATIENT',
       isVerified: true,
     },
   })
-  await prisma.patient.upsert({
-    where: { id: 'p_pakhaji' },
+  const pakHaji = await prisma.patient.upsert({
+    where: { id: pakHajiUser.id },
     update: {},
     create: {
-      id: 'p_pakhaji',
-      userId: pakHajiUser.id,
+      id: pakHajiUser.id,
       dateOfBirth: new Date('1950-09-21'),
       gender: 'M',
       districtCode: '3471',
@@ -200,11 +215,11 @@ async function main(): Promise<void> {
       riskScore: 45,
     },
   })
-  await prisma.user.upsert({
+  const sariUser = await prisma.user.upsert({
     where: { phone: '081300000002' },
     update: {},
     create: {
-      id: 'u_sari',
+      id: ID.userSari,
       phone: '081300000002',
       fullName: 'Sari Rahmawati',
       role: 'FAMILY',
@@ -212,11 +227,11 @@ async function main(): Promise<void> {
     },
   })
   await prisma.familyContact.upsert({
-    where: { patientId_phone: { patientId: 'p_pakhaji', phone: '081300000002' } },
+    where: { patientId_phone: { patientId: pakHaji.id, phone: '081300000002' } },
     update: {},
     create: {
-      patientId: 'p_pakhaji',
-      userId: 'u_sari',
+      patientId: pakHaji.id,
+      userId: sariUser.id,
       name: 'Sari Rahmawati',
       phone: '081300000002',
       relationship: 'KEPONAKAN',
@@ -229,11 +244,11 @@ async function main(): Promise<void> {
   })
 
   const amlodipine = await prisma.medication.upsert({
-    where: { id: 'med_amlodipine' },
+    where: { id: ID.medicationAmlodipine },
     update: {},
     create: {
-      id: 'med_amlodipine',
-      patientId: 'p_pakhaji',
+      id: ID.medicationAmlodipine,
+      patientId: pakHaji.id,
       name: 'Amlodipine',
       dosage: '5 mg',
       form: 'TABLET',
@@ -241,14 +256,15 @@ async function main(): Promise<void> {
     },
   })
   await prisma.schedule.upsert({
-    where: { id: 'sch_amlodipine_pagi' },
+    where: { id: ID.scheduleAmlodipinePagi },
     update: {},
     create: {
-      id: 'sch_amlodipine_pagi',
-      patientId: 'p_pakhaji',
+      id: ID.scheduleAmlodipinePagi,
+      patientId: pakHaji.id,
       medicationId: amlodipine.id,
       timeOfDay: '07:00',
       daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+      dailyFrequency: 1,
       doseQty: '1 tablet',
       startDate: new Date('2026-06-15'),
       timeWindowMinutes: 30,

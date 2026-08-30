@@ -1,21 +1,17 @@
 // State machine eskalasi bertingkat CareLoop.
 // Alur: WAITING_PATIENT -> FAMILY_TIER_1 -> FAMILY_TIER_2 -> NAKES
 // Ref: docs/ARCHITECTURE.md (state machine), docs/PRD.md (FR-7), docs/TESTING.md (ES-1..ES-12)
+import type { EscalationEventType, EscalationRunStatus } from '@careloop/shared'
 
-export type EscalationState =
-  | 'WAITING_PATIENT'
-  | 'FAMILY_TIER_1'
-  | 'FAMILY_TIER_2'
-  | 'NAKES'
-  | 'HANDLED'
-  | 'RESOLVED'
-  | 'TIMED_OUT'
+/** State run = kolom escalation_runs.status (satu sumber di packages/shared). */
+export type EscalationState = EscalationRunStatus
 
-export type EscalationEventType = 'PATIENT_CONFIRMED' | 'TIMEOUT' | 'FAMILY_HANDLED' | 'NAKES_HANDLED'
+export type { EscalationEventType }
 
 export type NotifyTarget = 'FAMILY_TIER_1' | 'FAMILY_TIER_2' | 'NAKES'
 
-export interface EscalationContext {
+/** Konteks keputusan transisi — beda dari enum EscalationContext (SCHEDULE|EMERGENCY). */
+export interface EscalationRunContext {
   hasTier1: boolean
   hasTier2: boolean
   /** emergencyPreference = NAKES_FIRST (pasien tinggal sendiri / tanpa keluarga dekat) */
@@ -40,7 +36,7 @@ export class InvalidTransitionError extends Error {
 export function reduceEscalation(
   state: EscalationState,
   event: EscalationEventType,
-  ctx: EscalationContext,
+  ctx: EscalationRunContext,
 ): TransitionResult {
   switch (state) {
     case 'WAITING_PATIENT':
@@ -68,7 +64,7 @@ function handled(): TransitionResult {
   return { to: 'HANDLED', notify: [] }
 }
 
-function reduceWaitingPatient(event: EscalationEventType, ctx: EscalationContext): TransitionResult {
+function reduceWaitingPatient(event: EscalationEventType, ctx: EscalationRunContext): TransitionResult {
   switch (event) {
     case 'PATIENT_CONFIRMED':
       return resolved()
@@ -88,7 +84,7 @@ function reduceWaitingPatient(event: EscalationEventType, ctx: EscalationContext
   }
 }
 
-function reduceFamilyTier1(event: EscalationEventType, ctx: EscalationContext): TransitionResult {
+function reduceFamilyTier1(event: EscalationEventType, ctx: EscalationRunContext): TransitionResult {
   switch (event) {
     case 'PATIENT_CONFIRMED':
       return resolved()
@@ -103,7 +99,7 @@ function reduceFamilyTier1(event: EscalationEventType, ctx: EscalationContext): 
   }
 }
 
-function reduceFamilyTier2(event: EscalationEventType, _ctx: EscalationContext): TransitionResult {
+function reduceFamilyTier2(event: EscalationEventType, _ctx: EscalationRunContext): TransitionResult {
   switch (event) {
     case 'PATIENT_CONFIRMED':
       return resolved()

@@ -9,7 +9,7 @@
 ### 1.1 Format
 - Content-Type: `application/json` (kecuali upload/export).
 - Timestamp: ISO 8601 UTC (`2026-08-16T02:30:00Z`).
-- ID: uuid.
+- ID: **uuid v4** di semua path param & body (termasuk data seed demo). Nilai non-uuid ditolak `400 VALIDATION_ERROR`.
 
 ### 1.2 Response Shape
 **Sukses:**
@@ -149,9 +149,10 @@ Refresh JWT dengan `refreshToken` di body.
 **POST /v1/patients/:id/schedules — Request:**
 ```json
 {
-  "medicationId": "m1",
+  "medicationId": "6f1a1e7c-3f1c-4a2b-9c1d-2b7a5e0d1a01",
   "timeOfDay": "08:00",
   "daysOfWeek": [1,2,3,4,5,6,7],
+  "dailyFrequency": 1,
   "doseQty": "1 tablet",
   "startDate": "2026-08-01",
   "timeWindowMinutes": 30,
@@ -159,6 +160,8 @@ Refresh JWT dengan `refreshToken` di body.
 }
 ```
 **Response 201:** objek `schedule` + `nextFireAt` (dihitung server).
+- `daysOfWeek` kosong / tidak dikirim = setiap hari. `dailyFrequency` default `1`.
+
 
 ### 3.3 Reminder & Konfirmasi (Fitur 1–3)
 
@@ -171,20 +174,21 @@ Refresh JWT dengan `refreshToken` di body.
 
 **POST /v1/compliance/confirm — Request:**
 ```json
-{ "scheduleId": "s1", "channel": "MOBILE_APP" }
+{ "scheduleId": "9c2e4d5a-0b17-4c8e-9a3f-1d6b8e2f4c30", "channel": "IN_APP" }
 ```
 **Response 200:**
 ```json
 {
   "data": {
-    "logId": "cl1",
-    "scheduleId": "s1",
+    "logId": "1f0c7b2e-5d43-4a91-8e6c-7b0a9d3f2e58",
+    "scheduleId": "9c2e4d5a-0b17-4c8e-9a3f-1d6b8e2f4c30",
     "status": "CONFIRMED",
     "confirmedAt": "2026-08-16T01:12:00Z",
     "escalationCancelled": true
   }
 }
 ```
+- `channel` menerima subset `Channel`: `IN_APP` (default), `WHATSAPP`, `VOICE`.
 - Idempoten: konfirmasi ganda → `409 ALREADY_PROCESSED` (atau mengembalikan log yang sama dengan `200`).
 - **Konfirmasi via WhatsApp** masuk lewat webhook (lihat §6) — bukan endpoint ini.
 

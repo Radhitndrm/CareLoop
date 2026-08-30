@@ -72,7 +72,11 @@ export const EscalationRunStatus = {
 } as const
 export type EscalationRunStatus = (typeof EscalationRunStatus)[keyof typeof EscalationRunStatus]
 
-export const EscalationTier = { TIER_1: 'TIER_1', TIER_2: 'TIER_2' } as const
+export const EscalationTier = {
+  TIER_1: 'TIER_1',
+  TIER_2: 'TIER_2',
+  NAKES: 'NAKES',
+} as const
 export type EscalationTier = (typeof EscalationTier)[keyof typeof EscalationTier]
 
 export const FamilyTier = { TIER_1: 'TIER_1', TIER_2: 'TIER_2' } as const
@@ -155,6 +159,72 @@ export const ScreeningType = {
   GENERAL: 'GENERAL',
 } as const
 export type ScreeningType = (typeof ScreeningType)[keyof typeof ScreeningType]
+
+export const MedicalForm = {
+  TABLET: 'TABLET',
+  KAPSUL: 'KAPSUL',
+  SIRUP: 'SIRUP',
+  INJEKSI: 'INJEKSI',
+  LAINNYA: 'LAINNYA',
+} as const
+export type MedicalForm = (typeof MedicalForm)[keyof typeof MedicalForm]
+
+export const NotificationStatus = {
+  PENDING: 'PENDING',
+  SENT: 'SENT',
+  DELIVERED: 'DELIVERED',
+  READ: 'READ',
+  FAILED: 'FAILED',
+  RETRYING: 'RETRYING',
+} as const
+export type NotificationStatus = (typeof NotificationStatus)[keyof typeof NotificationStatus]
+
+export const ReminderChannel = {
+  WHATSAPP: 'WHATSAPP',
+  PUSH: 'PUSH',
+  VOICE: 'VOICE',
+} as const
+export type ReminderChannel = (typeof ReminderChannel)[keyof typeof ReminderChannel]
+
+export const ReminderStatus = {
+  SENT: 'SENT',
+  FAILED: 'FAILED',
+  RETRYING: 'RETRYING',
+} as const
+export type ReminderStatus = (typeof ReminderStatus)[keyof typeof ReminderStatus]
+
+export const EscalationStepResponse = {
+  ACK_HANDLE: 'ACK_HANDLE',
+  ACK_LOOKING: 'ACK_LOOKING',
+  NONE: 'NONE',
+} as const
+export type EscalationStepResponse =
+  (typeof EscalationStepResponse)[keyof typeof EscalationStepResponse]
+
+export const ScreeningStatus = {
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+  ABANDONED: 'ABANDONED',
+} as const
+export type ScreeningStatus = (typeof ScreeningStatus)[keyof typeof ScreeningStatus]
+
+export const MessageDirection = { IN: 'IN', OUT: 'OUT' } as const
+export type MessageDirection = (typeof MessageDirection)[keyof typeof MessageDirection]
+
+export const NakesScopeType = {
+  PUSKESMAS: 'PUSKESMAS',
+  DISTRICT: 'DISTRICT',
+  ALL: 'ALL',
+} as const
+export type NakesScopeType = (typeof NakesScopeType)[keyof typeof NakesScopeType]
+
+// Subset Channel yang sah untuk konfirmasi kepatuhan (docs/DATABASE.md 3.8).
+export const ComplianceChannel = {
+  WHATSAPP: Channel.WHATSAPP,
+  IN_APP: Channel.IN_APP,
+  VOICE: Channel.VOICE,
+} as const
+export type ComplianceChannel = (typeof ComplianceChannel)[keyof typeof ComplianceChannel]
 
 export const EscalationEventType = {
   PATIENT_CONFIRMED: 'PATIENT_CONFIRMED',
