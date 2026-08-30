@@ -42,16 +42,11 @@ erDiagram
     medications ||--o{ medication_stocks : "punya stok"
 
     escalation_runs ||--o{ escalation_steps : "terdiri"
-    escalation_runs ||--o{ emergency_alerts : "terkait" 
-    emergency_alerts }o--o| escalation_runs : "opsional"
+    escalation_runs |o--o| emergency_alerts : "sumber (source_emergency_id)"
 
-    users ||--o{ escalations_responses : "merespons" 
-    escalation_steps ||--o{ escalations_responses : "menampung"
+    users ||--o{ escalation_steps : "merespons"
     nakes_assignments }o--o| puskesmas : "ke puskesmas"
-    patients }o--o| puskesmas : "terdaftar"
 
-    facilities ||--o{ puskesmas : "berupa faskes"
-    screening_questions ||--o{ screening_answers : "mendefinisikan"
     screenings ||--o{ screening_answers : "mengisi"
 
     audit_logs }o--o| patients : "mengacu (opsional)"
@@ -87,7 +82,7 @@ Profil klinis & demografi pasien (ekstensi `users.role=PATIENT`).
 
 | Kolom | Tipe | Deskripsi |
 |---|---|---|
-| id | uuid PK (FK users.id) | 1:1 dengan user |
+| id | uuid PK **dan** FK → users.id | 1:1 dengan user; tidak ada kolom `user_id` terpisah |
 | nik | varchar(16) nullable unique | **Encrypted at rest** |
 | date_of_birth | date | |
 | gender | enum `M` `F` | |
@@ -97,7 +92,7 @@ Profil klinis & demografi pasien (ekstensi `users.role=PATIENT`).
 | living_situation | enum `ALONE` `WITH_FAMILY` `FAR_FROM_FAMILY` `OTHER` | Kunci jalur eskalasi nakes |
 | has_nearby_family | bool default true | Fast-track eskalasi nakes |
 | emergency_preference | enum `FAMILY_FIRST` `NAKES_FIRST` | Urutan eskalasi darurat |
-| health_condition | text[] | Array penyakit kronis (diabetes, hipertensi, tbc…) |
+| health_conditions | text[] | Array penyakit kronis (diabetes, hipertensi, tbc…) |
 | bpjs_number | varchar(20) nullable | **Encrypted**; placeholder integrasi BPJS |
 | smartwatch_enabled | bool default false | |
 | voice_enabled | bool default false | Voice reminder (TTS) |
@@ -199,7 +194,7 @@ Catatan kepatuhan (append-only).
 | scheduled_at | timestamptz | Waktu jadwal (UTC) |
 | confirmed_at | timestamptz nullable | Waktu konfirmasi |
 | status | enum `CONFIRMED` `CONFIRMED_LATE` `MISSED` `TUNDA` `PENDING` | |
-| channel | enum `WHATSAPP` `MOBILE_APP` `VOICE` | |
+| channel | enum `WHATSAPP` `IN_APP` `VOICE` | Subset `Channel`; konfirmasi dari app = `IN_APP` |
 | source_message_id | varchar(128) nullable | Dedup WhatsApp |
 | notes | text nullable | |
 | created_at | timestamptz | |
@@ -237,7 +232,7 @@ Insiden darurat (anomali → konfirmasi → eskalasi).
 | hr_bpm | smallint nullable | Snapshot saat trigger |
 | patient_confirmed_safe | bool nullable | Pasien jawab "Saya aman" |
 | patient_confirmed_at | timestamptz nullable | |
-| escalation_run_id | uuid nullable FK → escalation_runs | |
+| _(relasi run)_ | — | FK 1:1 disimpan di `escalation_runs.source_emergency_id` (unique), bukan di sini |
 | location_lat / location_lng | double precision nullable | GPS terakhir |
 | status | enum `PENDING_PATIENT_CONFIRM` `ESCALATING` `RESOLVED_SAFE` `HANDLED` `TIMED_OUT` | |
 | alert_sent_to_family_at | timestamptz nullable | |
@@ -264,7 +259,7 @@ Satu sesi eskalasi (untuk kepatuhan **atau** darurat).
 | resolved_by | uuid nullable FK | |
 | resolution_type | enum `PATIENT_CONFIRMED` `FAMILY_HANDLED` `NAKES_HANDLED` `TIMEOUT` `CANCELLED` nullable | |
 | config_snapshot | jsonb | Snapshot timeout config saat run (untuk audit) |
-| created_at | timestamptz | |
+| created_at / updated_at | timestamptz | |
 
 ### 3.12 `escalation_steps`
 Setiap langkah pengiriman/notifikasi dalam run.
@@ -505,6 +500,24 @@ Relasi nakes ↔ puskesmas/wilayah (scope dashboard).
 | RiskLevel | LOW, MEDIUM, HIGH |
 | ExportStatus | PENDING, PROCESSING, READY, FAILED |
 | EscalationContext | SCHEDULE, EMERGENCY |
+| EmergencyTrigger | ANOMALY_HR, NO_RESPONSE_MED, OTHER |
+| EmergencyPreference | FAMILY_FIRST, NAKES_FIRST |
+| Gender | M, F |
+| Relationship | ANAK, PASANGAN, SAUDARA, CUCU, TETANGGA, KEPONAKAN, LAINNYA |
+| NakesRole | DOKTER, PERAWAT, BIDAN, KADER, LAINNYA |
+| NakesScopeType | PUSKESMAS, DISTRICT, ALL |
+| MedicalForm | TABLET, KAPSUL, SIRUP, INJEKSI, LAINNYA |
+| NotificationStatus | PENDING, SENT, DELIVERED, READ, FAILED, RETRYING |
+| ReminderChannel | WHATSAPP, PUSH, VOICE |
+| ReminderStatus | SENT, FAILED, RETRYING |
+| EscalationStepResponse | ACK_HANDLE, ACK_LOOKING, NONE |
+| ScreeningType | DIABETES_RISK, HYPERTENSION, GENERAL |
+| ScreeningStatus | IN_PROGRESS, COMPLETED, ABANDONED |
+| MessageDirection | IN, OUT |
+| FacilityType | PUSKESMAS, PUSKESMAS_PEMBANTU, RUMAH_SAKIT, KLINIK, APOTEK |
+
+> Sumber tunggal: `packages/shared/src/enums.ts` = `enum` di `schema.prisma` = tabel ini.
+> `ComplianceChannel` (WHATSAPP, IN_APP, VOICE) adalah **subset** `Channel` untuk kolom `compliance_logs.channel`, bukan enum DB tersendiri.
 
 ---
 
@@ -515,3 +528,17 @@ Relasi nakes ↔ puskesmas/wilayah (scope dashboard).
 - Jsonb → `Json` di Prisma.
 - Point → custom scalar `Unsupported("point")` atau simpan sebagai `Decimal(9,6)` x2 (lat/lng) — **rekomendasi MVP: dua kolom Decimal** untuk kesederhanaan + index bbox.
 - Migrasi: `prisma migrate dev`; seed: `prisma db seed` (file `prisma/seed.ts`) — data sintetis.
+- Nama tabel/kolom di dokumen ini adalah **nama logis** (snake_case). Model Prisma memakai field camelCase (`created_at` → `createdAt`) tanpa `@map`, jadi kolom fisik mengikuti nama field Prisma. Kontrak JSON API selalu camelCase.
+
+### 7.1 Keputusan kontrak data (CL-001)
+
+| Topik | Keputusan | Alasan |
+|---|---|---|
+| Strategi ID | **uuid-only** di semua tabel, termasuk seed | Validator bersama memakai `z.string().uuid()`; id "readable" (`p_buratna`) ditolak |
+| Relasi pasien | `patients.id` = `users.id` (PK sekaligus FK) | Menghapus kolom `user_id` yang redundan; sesuai §3.2 |
+| Enum channel | **`IN_APP`** (bukan `MOBILE_APP`) | Katalog `Channel` di §6 adalah sumber tunggal; `MOBILE_APP` hanya muncul di dua contoh |
+| `schedules.daily_frequency` | **Dibuat** di Prisma (`Int @default(1)`) | Ada di §3.6, hilang di schema |
+| Tier `NAKES` | **Ditambahkan** ke enum `EscalationTier` | Dibutuhkan `escalation_steps.tier` saat eskalasi ke nakes |
+| Tabel `screening_questions` | **Won't (MVP)** | Bank pertanyaan skrining statis di kode (fitur 9 rule-based); tidak perlu tabel |
+| Tabel `escalations_responses` | **Won't** | Respons sudah tercatat di `escalation_steps.response` / `responded_at` |
+| Index partial (`escalation_runs`, `compliance_logs.source_message_id`) | Ditulis manual di migrasi **CL-002** | Prisma belum mendukung partial unique index secara deklaratif |

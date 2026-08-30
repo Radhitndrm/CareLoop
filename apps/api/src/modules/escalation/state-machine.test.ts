@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   InvalidTransitionError,
   reduceEscalation,
-  type EscalationContext,
+  type EscalationRunContext,
 } from './state-machine'
 
-const ctx: EscalationContext = { hasTier1: true, hasTier2: true, nakesFirst: false }
+const ctx: EscalationRunContext = { hasTier1: true, hasTier2: true, nakesFirst: false }
 
 describe('reduceEscalation — state machine bertingkat', () => {
   it('ES-1: pasien konfirmasi di WAITING_PATIENT -> RESOLVED, tanpa notify', () => {

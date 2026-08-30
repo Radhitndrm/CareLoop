@@ -4,7 +4,7 @@ export { reduceEscalation, InvalidTransitionError } from './state-machine'
 export type {
   EscalationState,
   EscalationEventType,
-  EscalationContext,
+  EscalationRunContext,
   TransitionResult,
   NotifyTarget,
 } from './state-machine'
