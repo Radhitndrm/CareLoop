@@ -90,10 +90,17 @@ Minta OTP login via WhatsApp (pasien/keluarga).
 // 200 Response
 { "data": { "otpExpiresAt": "2026-08-16T02:35:00Z", "retryAfterSec": 30 } }
 ```
-- Rate limit: 1 per 30 dtk per nomor; max 5 percobaan.
+- Rate limit: 1 per 30 dtk per nomor (`OTP_RESEND_COOLDOWN_SEC`); max 5 percobaan verifikasi
+  per kode (`OTP_MAX_ATTEMPTS`). Kode berlaku `OTP_TTL_SEC` detik (default 300).
+- **429 `RATE_LIMITED`** saat diminta ulang sebelum cooldown habis; `details.retryAfterSec`
+  berisi sisa detik.
+- Respons **selalu sama** untuk nomor terdaftar maupun tidak — endpoint ini tidak bisa dipakai
+  memetakan pengguna. Kode tidak pernah ikut dikembalikan di respons.
+- Saat `PROVIDER_MODE=mock` kodenya tetap `OTP_MOCK_CODE` (default `123456`) dan tidak ada
+  pesan WhatsApp yang dikirim. Pengiriman nyata menyusul di CL-101.
 
 ### POST `/v1/auth/otp/verify`
-Verifikasi OTP → kembalikan JWT + profil.
+Verifikasi OTP → kembalikan JWT + profil. Hanya untuk role `PATIENT` & `FAMILY`.
 
 ```json
 // Request
@@ -109,6 +116,13 @@ Verifikasi OTP → kembalikan JWT + profil.
   }
 }
 ```
+
+- Kode sekali pakai — dihapus begitu berhasil dipakai.
+- **401 `UNAUTHORIZED`** dengan pesan tunggal `Kode OTP salah atau sudah kedaluwarsa` untuk semua
+  kegagalan (kode salah, kedaluwarsa, jatah percobaan habis, nomor tidak terdaftar, role
+  nakes/admin, akun nonaktif).
+- Kode OTP saat ini disimpan **di memori proses** — hilang saat restart dan tidak dibagi antar
+  replika. Pemindahan ke Redis dijadwalkan di CL-401.
 
 ### POST `/v1/auth/login` (nakes/admin)
 Kata sandi bcrypt (cost 12). Identifikasi lewat `phone` **atau** `email` — tepat salah satu.

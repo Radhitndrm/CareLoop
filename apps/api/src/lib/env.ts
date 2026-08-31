@@ -36,6 +36,16 @@ export const envSchema = z
     JWT_EXPIRES_IN: z.string().default('24h'),
     DATA_ENCRYPTION_KEY: z.string().optional(),
 
+    // OTP login pasien & keluarga — batas dari docs/API.md §2.
+    OTP_TTL_SEC: seconds(300),
+    OTP_RESEND_COOLDOWN_SEC: seconds(30),
+    OTP_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+    /** Kode tetap saat PROVIDER_MODE=mock supaya demo tidak bergantung pengiriman WA. */
+    OTP_MOCK_CODE: z
+      .string()
+      .regex(/^\d{6}$/, 'OTP_MOCK_CODE harus 6 digit angka')
+      .default('123456'),
+
     // Integrasi keluar. PROVIDER_MODE=mock dipakai saat demo/offline.
     PROVIDER_MODE: z.enum(['mock', 'live']).default('mock'),
     WHATSAPP_TOKEN: z.string().optional(),
