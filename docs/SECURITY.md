@@ -147,6 +147,9 @@ UU PDP (UU 27/2022) menekankan **kewajiban pemilik/processor data**:
 `actor`, `role`, `action`, `resource_type/id`, `patient_id` (konteks), `ip`, `user_agent`, `meta` (non-sensitif), `created_at`.
 
 ### 8.3 Aturan
+- Implementasi: `apps/api/src/lib/audit.ts` — `createAuditLog(prisma, input)` menulis satu baris, `auditContext(req)` mengambil aktor/IP/user-agent dari request, dan `AuditAction` (di `packages/shared/src/enums.ts`) menyediakan nama action pada tabel §8.1 agar tidak ditulis sebagai string lepas.
+- `meta` disaring `sanitizeMeta()` sebelum menyentuh database: kunci yang mengandung `pass`, `otp`, `token`, `secret`, `authorization`, `nik`, atau `encryption` diganti `[redacted]`, termasuk di objek bersarang.
+- Jalur kritis (reminder, eskalasi, darurat) memakai `tryCreateAuditLog()` — kegagalan menulis audit dilaporkan ke logger tetapi tidak membatalkan aksi utama. Alert darurat tidak boleh gagal hanya karena baris audit gagal ditulis.
 - Append-only; tidak ada update/delete (kecuali retensi setelah periode).
 - Time source: server clock (NTP).
 - Akses audit log hanya `ADMIN` (+ `NAKES` untuk scope sendiri).
