@@ -2,6 +2,7 @@
 // fixture integration test (tests/helpers/test-db.ts).
 // UU PDP: seluruh nama, NIK, dan nomor HP di sini fiktif. Jangan pernah isi data pasien riil.
 import type { PrismaClient } from '@prisma/client'
+import { hashPassword } from '../src/lib/password'
 
 // UUID v4 statis supaya seed idempoten dan tetap lolos validator z.string().uuid()
 // (docs/DATABASE.md §1). Nilai sengaja berpola agar jelas sintetis.
@@ -29,6 +30,11 @@ export const DEMO_PHONES = {
   sari: '081300000002',
 } as const
 
+// Kata sandi akun nakes demo. Bukan secret produksi: seluruh isi file ini data
+// sintetis untuk demo & test, dan hash-nya dibangkitkan saat seed berjalan.
+// Dipakai juga di docs/API.md §2 sebagai contoh login.
+export const DEMO_NAKES_PASSWORD = 'CareLoop#Demo2026'
+
 /**
  * Menulis dua persona kontras untuk demo & test:
  * - Bu Ratna: ALONE + NAKES_FIRST (memicu jalur eskalasi langsung ke nakes)
@@ -51,16 +57,19 @@ export async function seedDemoPersonas(prisma: PrismaClient): Promise<void> {
     },
   })
 
+  // Hash dibangkitkan saat seed agar akun demo benar-benar bisa login (CL-006).
+  const nakesPasswordHash = await hashPassword(DEMO_NAKES_PASSWORD)
+
   const nakes = await prisma.user.upsert({
     where: { phone: DEMO_PHONES.nakesDewi },
-    update: {},
+    update: { passwordHash: nakesPasswordHash },
     create: {
       id: DEMO_IDS.userNakesDewi,
       phone: DEMO_PHONES.nakesDewi,
       fullName: 'dr. Dewi Lestari',
       role: 'NAKES',
       isVerified: true,
-      passwordHash: '$2b$12$dummyplaceholderforthepasswordhash000',
+      passwordHash: nakesPasswordHash,
     },
   })
 

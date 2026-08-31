@@ -111,7 +111,31 @@ Verifikasi OTP → kembalikan JWT + profil.
 ```
 
 ### POST `/v1/auth/login` (nakes/admin)
-Username + password (bcrypt). → `{ data: { accessToken, user } }`.
+Kata sandi bcrypt (cost 12). Identifikasi lewat `phone` **atau** `email` — tepat salah satu.
+Pasien & keluarga tidak memakai endpoint ini; mereka lewat OTP di atas.
+
+```json
+// Request
+{ "phone": "081100000001", "password": "CareLoop#Demo2026" }
+```
+```json
+// 200 Response
+{
+  "data": {
+    "accessToken": "eyJ...",
+    "expiresIn": 86400,
+    "user": { "id": "u1", "role": "NAKES", "fullName": "dr. Dewi Lestari", "isVerified": true }
+  }
+}
+```
+
+- `expiresIn` dalam detik, berasal dari `JWT_EXPIRES_IN` (default `24h`).
+- Claim token: `{ sub, role }` — tanpa data pribadi.
+- **401 `UNAUTHORIZED`** dengan pesan tunggal `Nomor/email atau kata sandi salah` untuk semua
+  kegagalan kredensial (akun tidak ada, kata sandi salah, role bukan nakes/admin, akun tanpa
+  kata sandi). Pesan sengaja tidak dibedakan agar nomor terdaftar tidak bisa ditebak.
+- **403 `FORBIDDEN`** hanya jika kata sandi benar tetapi akun dinonaktifkan.
+- Akun demo seed: `081100000001` / `CareLoop#Demo2026` (dr. Dewi Lestari — data sintetis).
 
 ### POST `/v1/auth/refresh`
 Refresh JWT dengan `refreshToken` di body.

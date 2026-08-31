@@ -13,6 +13,23 @@ import {
 /** Semua id domain adalah uuid v4 (docs/DATABASE.md §1) — termasuk data seed. */
 export const uuidSchema = z.string().uuid()
 
+/**
+ * Login nakes/admin dengan kata sandi (docs/API.md §2).
+ * Pasien & keluarga tidak lewat sini — mereka memakai OTP (CL-007).
+ * Identifikasi boleh phone ATAU email, tepat salah satu.
+ */
+export const nakesLoginSchema = z
+  .object({
+    phone: z.string().trim().min(8).max(20).optional(),
+    email: z.string().trim().email().optional(),
+    password: z.string().min(8, 'Kata sandi minimal 8 karakter').max(128),
+  })
+  .refine((input) => Boolean(input.phone) !== Boolean(input.email), {
+    message: 'Isi salah satu: phone atau email',
+    path: ['phone'],
+  })
+export type NakesLoginInput = z.infer<typeof nakesLoginSchema>
+
 export const complianceConfirmSchema = z.object({
   scheduleId: uuidSchema,
   channel: z.nativeEnum(ComplianceChannel).default(ComplianceChannel.IN_APP),
