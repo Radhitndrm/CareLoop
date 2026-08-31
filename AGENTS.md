@@ -159,18 +159,38 @@ npm run dev           # (di apps/api|web|mobile) dev server
 
 Semua variabel via `process.env`, dan didaftarkan di `.env.example` masing-masing app. **Jangan pernah hardcode.**
 
-| Variabel | App | Kegunaan |
-|---|---|---|
-| `DATABASE_URL` | api | Koneksi PostgreSQL |
-| `REDIS_URL` | api | Opsional — cache & job queue |
-| `JWT_SECRET` | api | Signing token |
-| `WHATSAPP_TOKEN` | api | Token WhatsApp Business API |
-| `WHATSAPP_PHONE_ID` | api | Nomor bisnis WA |
-| `WA_WEBHOOK_VERIFY_TOKEN` | api | Verifikasi webhook WhatsApp |
-| `NODE_ENV` | semua | `development`/`test`/`production` |
-| `TZ_OFFSET` | api | Default offset jam pasien (WIB `+07:00`) |
-| `NEXT_PUBLIC_API_URL` | web | Base URL API |
-| `EXPO_PUBLIC_API_URL` | mobile | Base URL API |
+Sumber tunggal untuk api: `apps/api/src/lib/env.ts` (validasi zod, gagal = startup berhenti dengan pesan per-key).
+
+| Variabel | App | Default | Kegunaan |
+|---|---|---|---|
+| `NODE_ENV` | semua | `development` | `development`/`test`/`production` |
+| `PORT` | api | `4000` | Port HTTP |
+| `DATABASE_URL` | api | — (wajib) | Koneksi PostgreSQL |
+| `DIRECT_URL` | api | — | Koneksi non-pooler untuk `prisma migrate` (Supabase) |
+| `TEST_DATABASE_URL` | api | — | DB integration test; **wajib beda** dari `DATABASE_URL` |
+| `REDIS_URL` | api | — | Opsional — cache & job queue |
+| `JWT_SECRET` | api | — (min 32 char) | Signing token |
+| `JWT_EXPIRES_IN` | api | `24h` | Masa berlaku access token |
+| `DATA_ENCRYPTION_KEY` | api | — | Enkripsi kolom sensitif |
+| `PROVIDER_MODE` | api | `mock` | `mock`/`live`; `live` mewajibkan kredensial WhatsApp |
+| `WHATSAPP_TOKEN` | api | — | Token WhatsApp Business API |
+| `WHATSAPP_PHONE_ID` | api | — | Nomor bisnis WA |
+| `WA_WEBHOOK_VERIFY_TOKEN` | api | — | Verifikasi webhook WhatsApp |
+| `WA_APP_SECRET` | api | — | Verifikasi signature webhook Meta |
+| `CORS_ORIGINS` | api | kosong | Whitelist origin (koma); **wajib** di production |
+| `RATE_LIMIT_MAX` | api | `120` | Request per window |
+| `RATE_LIMIT_WINDOW` | api | `1 minute` | Window rate limit |
+| `TZ_OFFSET` | api | `+07:00` | Default offset jam pasien (WIB) |
+| `ESCALATION_PATIENT_WAIT_SEC` | api | `1800` | FR-3.1 — tunggu konfirmasi pasien |
+| `ESCALATION_FAMILY_TIER1_WAIT_SEC` | api | `900` | FR-7.2 — timeout tier 1 |
+| `ESCALATION_FAMILY_TIER2_WAIT_SEC` | api | `900` | FR-7.2 — timeout tier 2 |
+| `ESCALATION_NAKES_WAIT_SEC` | api | `1800` | Timeout tier nakes |
+| `EMERGENCY_PATIENT_CONFIRM_SEC` | api | `45` | FR-4.3 — dibatasi 30–60 detik |
+| `COMPLIANCE_DEFER_MINUTES` | api | `15` | FR-2.4 — opsi "tunda" |
+| `ANOMALY_HR_MIN` / `ANOMALY_HR_MAX` | api | `50` / `120` | FR-4.2 — ambang anomali HR |
+| `ANOMALY_WINDOW_SEC` | api | `60` | FR-4.2 — jendela 2 bacaan berurutan |
+| `NEXT_PUBLIC_API_URL` | web | — | Base URL API |
+| `EXPO_PUBLIC_API_URL` | mobile | — | Base URL API |
 
 ---
 
