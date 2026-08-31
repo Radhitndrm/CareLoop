@@ -89,7 +89,28 @@ Lokasi: di samping source (`*.test.ts`).
 
 ## 4. Integration Test (API)
 
-Lokasi: `apps/api/tests/*.integration.test.ts`. Setup: DB test terpisah (Prisma `DATABASE_URL` test), migrate + seed fixture sebelum suite, jalankan per suite.
+Lokasi: `apps/api/tests/*.integration.test.ts`.
+
+**Setup DB test (CL-003).** Suite integration memakai database **terpisah** dari `DATABASE_URL`, dikonfigurasi lewat `TEST_DATABASE_URL`:
+
+```bash
+docker compose -f infra/docker-compose.yml up -d              # postgres 16 + redis 7
+docker exec careloop-postgres createdb -U careloop careloop_test
+# apps/api/.env → TEST_DATABASE_URL=postgresql://careloop:careloop@localhost:5432/careloop_test?schema=public
+npm run test
+```
+
+Helper `apps/api/tests/helpers/test-db.ts`:
+
+| Fungsi | Kegunaan |
+|---|---|
+| `isTestDbConfigured()` | `describe.skipIf(!isTestDbConfigured())` — suite **dilewati** (bukan gagal) bila `TEST_DATABASE_URL` kosong, sehingga `npm run test` tetap hijau tanpa docker |
+| `migrateTestDb()` | `prisma migrate deploy` ke DB test |
+| `createTestPrisma()` | PrismaClient yang terikat ke DB test |
+| `resetTestDb()` | `TRUNCATE` seluruh tabel domain (setup & teardown) |
+| `teardownTestDb()` | disconnect |
+
+`migrateTestDb()`/`createTestPrisma()` **menolak jalan** bila `TEST_DATABASE_URL` sama dengan `DATABASE_URL` — pengaman agar TRUNCATE tidak pernah mengenai DB dev/Supabase.
 
 **Kasus inti:**
 1. **Reminder fire** → job scheduler → `POST /internal/jobs/reminder` → notification WA mock dipanggil dengan benar → `reminder_logs` terisi.
@@ -172,8 +193,9 @@ Gunakan fake timers.
 
 ## 9. Test Data & Fixture
 
-- `prisma/seed.ts`: 1 pasien ALONE (Bu Ratna), 1 pasien WITH_FAMILY, family T1/T2, 1 nakes + kader, obat/jadwal, beberapa compliance log historis, 1 emergency selesai.
-- Gunakan `@faker-js/faker/locale/id_ID` — semua data **sintetis** (tidak ada nama/NIK/HP riil).
+- `prisma/personas.ts`: satu sumber persona sintetis (`DEMO_IDS`, `DEMO_PHONES`, `seedDemoPersonas()`) yang dipakai **bersama** oleh seed demo dan fixture test — Bu Ratna (ALONE, NAKES_FIRST, family T2 + kader primary) dan Pak Haji (WITH_FAMILY, family T1), obat & jadwal masing-masing.
+- `prisma/seed.ts` hanya membungkus `seedDemoPersonas()`; upsert sehingga idempoten.
+- Semua id memakai uuid v4 statis berpola `00000000-0000-4000-8000-…` agar lolos validator `z.string().uuid()` dan jelas sintetis. Nomor HP fiktif berpola (`0811/0812/0813` + blok nol) — **tidak ada nama/NIK/HP riil**.
 - Setiap suite integration memakai DB test bersih + `beforeAll` migrate/seed.
 - Token test: helper membuat JWT untuk role/scope tertentu.
 
@@ -211,7 +233,7 @@ GitHub Actions (`.github/workflows/ci.yml`):
 - lint
 - typecheck
 - unit: vitest run --coverage (threshold: garis 70% untuk modules/escalation, reminders, vitals, risk)
-- integration: docker compose up postgres redis → vitest run integration
+- integration: docker compose up postgres redis → createdb careloop_test → TEST_DATABASE_URL=... vitest run
 - web e2e: Playwright (2 skenario demo)
 ```
 

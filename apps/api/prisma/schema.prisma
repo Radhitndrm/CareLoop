@@ -83,6 +83,7 @@ enum EscalationRunStatus {
 enum EscalationTier {
   TIER_1
   TIER_2
+  NAKES
 }
 
 enum ResolutionType {
@@ -247,8 +248,7 @@ model User {
 
 model Patient {
   id                    String              @id
-  userId                String              @unique
-  user                  User                @relation(fields: [userId], references: [id])
+  user                  User                @relation(fields: [id], references: [id], onDelete: Cascade)
   nik                   String?             @unique
   dateOfBirth           DateTime?           @db.Date
   gender                Gender?
@@ -408,7 +408,8 @@ model Schedule {
   medicationId      String
   medication        Medication @relation(fields: [medicationId], references: [id])
   timeOfDay         String
-  daysOfWeek        Int[]
+  daysOfWeek        Int[]    @default([])
+  dailyFrequency    Int      @default(1)
   doseQty           String   @default("1 tablet")
   startDate         DateTime @db.Date
   endDate           DateTime? @db.Date

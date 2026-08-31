@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 
-export function newId(prefix: string): string {
-  return `${prefix}_${randomUUID()}`
+/** Semua id domain memakai uuid v4 (docs/DATABASE.md §1). */
+export function newId(): string {
+  return randomUUID()
 }
 
 export function nowUtc(): Date {
