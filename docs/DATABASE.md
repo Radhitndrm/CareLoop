@@ -459,6 +459,8 @@ Relasi nakes ↔ puskesmas/wilayah (scope dashboard).
 
 Dedup event smartwatch memakai unique biasa `VitalSign(patientId, source, recordedAt)` (TESTING AN-6).
 
+**Cara memakainya dari kode (CL-009).** `apps/api/src/lib/idempotency.ts` menyediakan `runOnce({ create, findExisting, constraint })`: `create` dijalankan langsung, dan bila database menolak dengan P2002 pada constraint yang disebut, record yang sudah ada dikembalikan sebagai `{ created: false, value }` — tanpa duplikat dan tanpa error ke pemanggil. Database sengaja dipakai sebagai satu-satunya wasit; pengecekan "sudah ada?" di aplikasi saja akan bocor ketika dua permintaan tiba bersamaan atau API berjalan di beberapa proses.
+
 ---
 
 ## 5. Indexing Strategy
