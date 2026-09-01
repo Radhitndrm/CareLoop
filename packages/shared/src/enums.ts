@@ -233,3 +233,26 @@ export const EscalationEventType = {
   NAKES_HANDLED: 'NAKES_HANDLED',
 } as const
 export type EscalationEventType = (typeof EscalationEventType)[keyof typeof EscalationEventType]
+
+/** Action audit log yang wajib dicatat (docs/SECURITY.md §8.1). */
+export const AuditAction = {
+  AUTH_LOGIN: 'auth.login',
+  AUTH_OTP_REQUEST: 'auth.otp.request',
+  AUTH_OTP_VERIFY: 'auth.otp.verify',
+  AUTH_REFRESH: 'auth.refresh',
+  PATIENT_CREATED: 'patient.created',
+  PATIENT_UPDATED: 'patient.updated',
+  PATIENT_CONSENT_GIVEN: 'patient.consent.given',
+  FAMILY_CONTACT_ADDED: 'family_contact.added',
+  FAMILY_CONTACT_UPDATED: 'family_contact.updated',
+  FAMILY_CONTACT_REMOVED: 'family_contact.removed',
+  COMPLIANCE_CONFIRMED: 'compliance.confirmed',
+  COMPLIANCE_DEFERRED: 'compliance.deferred',
+  EMERGENCY_TRIGGERED: 'emergency.triggered',
+  EMERGENCY_RESOLVED: 'emergency.resolved',
+  ESCALATION_STEP: 'escalation.step',
+  ESCALATION_HANDLED: 'escalation.handled',
+  EXPORT_JOB_CREATED: 'export.job.created',
+  EXPORT_DOWNLOADED: 'export.downloaded',
+} as const
+export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction]
