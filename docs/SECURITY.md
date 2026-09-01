@@ -75,6 +75,8 @@ UU PDP (UU 27/2022) menekankan **kewajiban pemilik/processor data**:
 - Secret kuat (≥ 32 byte) di env; rotasi didukung.
 
 ### 4.3 Otorisasi Server-side
+- Implementasi: `apps/api/src/lib/auth.ts` — preHandler `authenticate` (verifikasi Bearer JWT → `req.user`) dan `requireRole(...roles)` (403 bila role di luar daftar). `requireRole` ikut memverifikasi token, jadi route cukup memasang satu preHandler.
+- `assertOwnPatientData(claims, patientUserId)` menegakkan aturan "pasien hanya dirinya sendiri". Cakupan wilayah nakes (`nakes_assignments`) dan relasi keluarga ditegakkan di query masing-masing domain, bukan di middleware.
 - Setiap request memeriksa scope: pasien hanya akses dirinya; keluarga hanya pasien yang `family_contacts`-nya mencantumkan dia (aktif); nakes hanya pasien dalam scope assignment.
 - Family **tidak** dapat melihat vital detail kecuali `can_view_health=true`.
 - Emergency alert membedakan: keluarga lihat ringkasan + lokasi; nakes lihat penuh.
