@@ -23,3 +23,18 @@ export interface AuthUserClaims {
   patientId?: string
   scope?: string
 }
+
+/** Profil ringkas yang ikut dikembalikan setelah login/verifikasi OTP (docs/API.md §2). */
+export interface AuthSessionUser {
+  id: string
+  role: UserRole
+  fullName: string
+  isVerified: boolean
+}
+
+export interface AuthSession {
+  accessToken: string
+  /** Masa berlaku token dalam detik. */
+  expiresIn: number
+  user: AuthSessionUser
+}
