@@ -64,6 +64,9 @@ export const alreadyProcessed = (
 export const invalidTransition = (message: string, details?: ApiErrorDetails): ApiError =>
   new ApiError(422, ApiErrorCode.INVALID_TRANSITION, message, details)
 
+export const rateLimited = (message: string, details?: ApiErrorDetails): ApiError =>
+  new ApiError(429, ApiErrorCode.RATE_LIMITED, message, details)
+
 export interface NormalizedError {
   statusCode: number
   body: ApiErrorBody

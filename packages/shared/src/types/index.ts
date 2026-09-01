@@ -38,3 +38,9 @@ export interface AuthSession {
   expiresIn: number
   user: AuthSessionUser
 }
+
+/** Respons permintaan OTP — kode tidak pernah ikut dikirim (docs/API.md §2). */
+export interface OtpChallenge {
+  otpExpiresAt: string
+  retryAfterSec: number
+}

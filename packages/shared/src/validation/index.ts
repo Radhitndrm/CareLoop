@@ -30,6 +30,21 @@ export const nakesLoginSchema = z
   })
 export type NakesLoginInput = z.infer<typeof nakesLoginSchema>
 
+/** Nomor HP Indonesia: 08xxxxxxxxx atau +628xxxxxxxxx (docs/API.md §2). */
+export const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^(?:\+62|62|0)8\d{7,12}$/, 'Nomor HP tidak valid (contoh: 081200000001)')
+
+export const otpRequestSchema = z.object({ phone: phoneSchema })
+export type OtpRequestInput = z.infer<typeof otpRequestSchema>
+
+export const otpVerifySchema = z.object({
+  phone: phoneSchema,
+  otp: z.string().trim().regex(/^\d{6}$/, 'Kode OTP terdiri dari 6 digit angka'),
+})
+export type OtpVerifyInput = z.infer<typeof otpVerifySchema>
+
 export const complianceConfirmSchema = z.object({
   scheduleId: uuidSchema,
   channel: z.nativeEnum(ComplianceChannel).default(ComplianceChannel.IN_APP),

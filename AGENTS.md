@@ -172,6 +172,10 @@ Sumber tunggal untuk api: `apps/api/src/lib/env.ts` (validasi zod, gagal = start
 | `JWT_SECRET` | api | — (min 32 char) | Signing token |
 | `JWT_EXPIRES_IN` | api | `24h` | Masa berlaku access token |
 | `DATA_ENCRYPTION_KEY` | api | — | Enkripsi kolom sensitif |
+| `OTP_TTL_SEC` | api | `300` | Masa berlaku kode OTP (docs/API.md §2) |
+| `OTP_RESEND_COOLDOWN_SEC` | api | `30` | Jeda minimal antar permintaan OTP per nomor |
+| `OTP_MAX_ATTEMPTS` | api | `5` | Maksimal percobaan verifikasi per kode |
+| `OTP_MOCK_CODE` | api | `123456` | Kode tetap saat `PROVIDER_MODE=mock` |
 | `PROVIDER_MODE` | api | `mock` | `mock`/`live`; `live` mewajibkan kredensial WhatsApp |
 | `WHATSAPP_TOKEN` | api | — | Token WhatsApp Business API |
 | `WHATSAPP_PHONE_ID` | api | — | Nomor bisnis WA |
