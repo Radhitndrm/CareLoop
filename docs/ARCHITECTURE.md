@@ -153,7 +153,7 @@ Setiap service = modul di `apps/api/src/modules/`:
 ### 3.4 Integration Layer
 Semua integration di `apps/api/src/integrations/*`, masing-masing punya interface + implementasi nyata + implementasi mock:
 
-- `WhatsAppService` — kirim template message, interactive buttons; `sendComplianceReminder`, `sendEscalationAlert`, `sendEmergencyAlert`, `sendTtsVoice` (via provider). Mock: logger + dry-run.
+- `WhatsAppService` (CL-101) — satu-satunya jalur keluar pesan WhatsApp: `sendText`, `sendTemplate`, `sendInteractive` (tombol `REPLY` untuk konfirmasi 1-tap, tombol `URL` untuk deep-link `tel:112`/maps), `sendAudio`; retry backoff eksponensial (total 3×, FR-1.3). Provider lewat interface `WhatsAppProvider` agar bisa di-swap: `MockWhatsAppProvider` (dry-run + mencatat payload, default `PROVIDER_MODE=mock`) & `MetaCloudApiProvider` (stub — integrasi riil menyusul pasca CL-101).
 - `SmartwatchAdapter` — `fetchRecentHeartRate(patientId)`, `subscribeVitalsStream()`. Implementasi: Google Fit API / HealthKit. Mock: generator sintetis + endpoint `/dev/mock-anomaly`.
 - `LocationService` — ambil lokasi terakhir tersimpan / resolve geocode; integrasi Maps.
 - `TtsService` — generate audio reminder Bahasa Indonesia.

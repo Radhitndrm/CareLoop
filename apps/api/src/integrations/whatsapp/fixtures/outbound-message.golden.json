@@ -1,0 +1,33 @@
+{
+  "description": "Kerangka kontrak CL-101: pesan interaktif 1-tap (konfirmasi kepatuhan). Shape stabil dan siap dipetakan ke body Meta interactive; request.to dinormalkan menjadi E.164 saat tercatat.",
+  "request": {
+    "kind": "INTERACTIVE",
+    "to": "081200000001",
+    "interactive": {
+      "body": "Ingatan minum obat: Metformin 500 mg - 1 tablet pagi. Sudah diminum?",
+      "header": "Obat Pagi",
+      "footer": "Tekan Sudah Minum, atau Tunda 15 menit.",
+      "buttons": [
+        { "type": "REPLY", "id": "CONFIRM_TAKEN_s1", "title": "Sudah Minum" },
+        { "type": "REPLY", "id": "DEFER_s1", "title": "Tunda 15 mnt" }
+      ]
+    }
+  },
+  "expectedRecorded": {
+    "id": "mock_1",
+    "to": "6281200000001",
+    "payload": {
+      "kind": "INTERACTIVE",
+      "to": "6281200000001",
+      "interactive": {
+        "body": "Ingatan minum obat: Metformin 500 mg - 1 tablet pagi. Sudah diminum?",
+        "header": "Obat Pagi",
+        "footer": "Tekan Sudah Minum, atau Tunda 15 menit.",
+        "buttons": [
+          { "type": "REPLY", "id": "CONFIRM_TAKEN_s1", "title": "Sudah Minum" },
+          { "type": "REPLY", "id": "DEFER_s1", "title": "Tunda 15 mnt" }
+        ]
+      }
+    }
+  }
+}
