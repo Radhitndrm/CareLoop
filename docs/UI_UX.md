@@ -176,6 +176,40 @@ Balas INFO untuk edukasi, cek menu.
 
 - Tombol 112 dalam keadaan **tersembunyi** kecuali darurat (mengurangi rasa panik).
 
+### 5.2.1 (B) App Pasien — Layar Konfirmasi & Deep Link (CL-113)
+
+```
+┌──────────────────────────────────────┐
+│   CareLoop                           │
+│   Kepatuhan Obat & Bantuan Darurat   │
+│                                      │
+│   [ 🔗 Terbuka dari tautan WA ]      │ ← muncul jika via deep link
+│                                      │
+│   ┌── Waktunya Minum Obat ─────────┐ │
+│   │ Metformin 500 mg               │ │
+│   │ 1 tablet setelah sarapan pagi  │ │
+│   │ [ ⏰ 08:00 WIB ]                │ │
+│   │ ID: 11111111-1111-4111-...     │ │
+│   └────────────────────────────────┘ │
+│                                      │
+│   [ ✅ Obat Berhasil Dikonfirmasi! ] │ ← banner sukses hijau
+│   (atau ❌ Konfirmasi Gagal)         │ ← banner gagal merah + retry
+│                                      │
+│   [ 💊 Sudah Minum ] (hijau, 60dp)   │ ← font 20px, one-tap API POST
+│                                      │
+│   [ 📞 Panggil 112 ] (merah, 60dp)   │ ← one-tap tel:112 (bukan auto)
+└──────────────────────────────────────┘
+```
+
+- **Prinsip Aksesibilitas**:
+  - Tombol aksi utama berukuran besar (`minHeight: 60dp`), ukuran font label `20px` (memenuhi standar lansia ≥ 16px).
+  - Indikator loading (`ActivityIndicator`) saat memanggil endpoint API `POST /v1/compliance/confirm`.
+  - Banner hasil: hijau kontras tinggi (`#DCFCE7`/`#16A34A`) saat sukses, merah kontras tinggi (`#FEE2E2`/`#DC2626`) saat gagal.
+- **Dukungan Deep Link**:
+  - Skema kustom: `careloop://confirm?scheduleId=<uuid>` atau `careloop://confirm/<uuid>`.
+  - Fallback URL: `http://<host>/confirm?scheduleId=<uuid>`.
+  - Ekstraksi otomatis `scheduleId` saat cold start (`Linking.getInitialURL`) maupun warm start (`Linking.addEventListener`).
+
 ### 5.3 (B) App Pasien — Layar Darurat (Full Screen, bergetar)
 
 ```
