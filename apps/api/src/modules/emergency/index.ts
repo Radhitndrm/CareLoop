@@ -2,19 +2,24 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../../lib/prisma'
 import { notFound } from '../../lib/errors'
+import { emergencyPatientResponseSchema } from '@careloop/shared'
 import {
   createEmergencyFromAnomaly,
+  handlePatientEmergencyResponse,
   getEmergencyTimeoutSec,
   formatPatientEmergencyConfirmationMessage,
   defaultEmergencyQueueAdapter,
   type CreateEmergencyInput,
   type CreateEmergencyResult,
+  type PatientEmergencyResponseInput,
+  type PatientEmergencyResponseResult,
   type EmergencyExecutionDeps,
   type EmergencyPrismaClient,
 } from './emergency.service'
 
 export {
   createEmergencyFromAnomaly,
+  handlePatientEmergencyResponse,
   getEmergencyTimeoutSec,
   formatPatientEmergencyConfirmationMessage,
   defaultEmergencyQueueAdapter,
@@ -22,6 +27,8 @@ export {
 export type {
   CreateEmergencyInput,
   CreateEmergencyResult,
+  PatientEmergencyResponseInput,
+  PatientEmergencyResponseResult,
   EmergencyExecutionDeps,
   EmergencyPrismaClient,
 }
@@ -86,4 +93,25 @@ export function registerEmergencyRoutes(app: FastifyInstance): void {
 
     return reply.code(200).send({ data: alert })
   })
+
+  // Handler bersama untuk respons pasien terhadap insiden darurat (CL-205 / AC-4.2)
+  const handleResponse = async (req: any, reply: any) => {
+    const params = emergencyParamsSchema.parse(req.params)
+    const body = emergencyPatientResponseSchema.parse(req.body ?? {})
+
+    const result = await handlePatientEmergencyResponse(prisma, {
+      emergencyId: params.id,
+      response: body.response,
+      notes: body.notes,
+      actorUserId: (req.user as any)?.sub ?? null,
+    })
+
+    return reply.code(200).send({ data: result })
+  }
+
+  // POST /v1/emergencies/:id/patient-response (docs/API.md §3.5)
+  app.post('/v1/emergencies/:id/patient-response', handleResponse)
+
+  // POST /v1/emergencies/:id/respond (alias kontrak issue #32)
+  app.post('/v1/emergencies/:id/respond', handleResponse)
 }
