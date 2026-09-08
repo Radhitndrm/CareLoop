@@ -1,4 +1,43 @@
 import type { FastifyInstance } from 'fastify'
+import { prisma } from '../../lib/prisma'
+import {
+  ACTIVE_ESCALATION_STATUSES,
+  startEscalationRun,
+  transitionEscalationRun,
+  resolveEscalationRun,
+  handleEscalationRun,
+  cancelEscalationRun,
+  getActiveEscalationRun,
+  getEscalationRunById,
+  resolvePatientEscalationContext,
+  isActiveStatus,
+  isTerminalStatus,
+  TERMINAL_ESCALATION_STATUSES,
+} from './escalation.service'
+
+export {
+  ACTIVE_ESCALATION_STATUSES,
+  TERMINAL_ESCALATION_STATUSES,
+  isActiveStatus,
+  isTerminalStatus,
+  startEscalationRun,
+  transitionEscalationRun,
+  resolveEscalationRun,
+  handleEscalationRun,
+  cancelEscalationRun,
+  getActiveEscalationRun,
+  getEscalationRunById,
+  resolvePatientEscalationContext,
+}
+export type {
+  EscalationPrismaClient,
+  StartEscalationRunInput,
+  TransitionEscalationRunInput,
+  CreateEscalationStepInput,
+  ResolveEscalationRunInput,
+  HandleEscalationRunInput,
+  CancelEscalationRunInput,
+} from './escalation.service'
 
 export { reduceEscalation, InvalidTransitionError } from './state-machine'
 export type {
@@ -11,6 +50,24 @@ export type {
 
 export function registerEscalationRoutes(app: FastifyInstance): void {
   app.get('/v1/escalations/active', async () => {
-    return { data: [] }
+    const activeRuns = await prisma.escalationRun.findMany({
+      where: {
+        status: { in: ACTIVE_ESCALATION_STATUSES as any },
+      },
+      include: {
+        steps: true,
+        patient: {
+          select: {
+            id: true,
+            nik: true,
+            livingSituation: true,
+            emergencyPreference: true,
+          },
+        },
+      },
+      orderBy: { startedAt: 'desc' },
+    })
+
+    return { data: activeRuns }
   })
 }
