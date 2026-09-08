@@ -9,10 +9,14 @@ import {
   type HeartRateReading,
 } from './anomaly.rules'
 
+import { createEmergencyFromAnomaly, type EmergencyExecutionDeps } from '../emergency/emergency.service'
+
 export type VitalsPrismaClient = Pick<PrismaClient, 'vitalSign' | 'patient'>
 
 export interface IngestVitalOptions {
   customRuleConfig?: Partial<AnomalyRuleConfig>
+  triggerEmergency?: boolean
+  emergencyDeps?: EmergencyExecutionDeps
 }
 
 export interface IngestVitalResult {
@@ -30,6 +34,8 @@ export interface IngestVitalResult {
     rawPayload: unknown
   }
   isDuplicate: boolean
+  emergencyAlert?: any
+  escalationRun?: any
 }
 
 /**
@@ -267,9 +273,34 @@ export async function ingestVitalSign(
       },
     })
 
+    let emergencyAlert: any = undefined
+    let escalationRun: any = undefined
+
+    // 5. Jika terdeteksi anomali, picu EmergencyAlert + EscalationRun (CL-204 / AC-4.1)
+    if (
+      isAnomalous &&
+      options?.triggerEmergency !== false &&
+      Boolean((prisma as any).emergencyAlert)
+    ) {
+      const emergencyResult = await createEmergencyFromAnomaly(
+        prisma as any,
+        {
+          patientId: input.patientId,
+          hrBpm: input.hrBpm,
+          triggeredAt: recordedAtUtc,
+          anomalyReason,
+        },
+        options?.emergencyDeps,
+      )
+      emergencyAlert = emergencyResult.emergencyAlert
+      escalationRun = emergencyResult.escalationRun
+    }
+
     return {
       vitalSign,
       isDuplicate: false,
+      emergencyAlert,
+      escalationRun,
     }
   } catch (err) {
     // Race condition guard: jika ada request bersamaan yang baru saja membuat record
