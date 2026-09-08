@@ -14,6 +14,13 @@ import {
   isTerminalStatus,
   TERMINAL_ESCALATION_STATUSES,
 } from './escalation.service'
+import {
+  handlePatientEscalationTimeout,
+  getPatientTimeoutSec,
+  formatFamilyAlertMessage,
+  InMemoryEscalationQueueAdapter,
+  MockEscalationNotifier,
+} from './timeout.service'
 
 export {
   ACTIVE_ESCALATION_STATUSES,
@@ -28,6 +35,11 @@ export {
   getActiveEscalationRun,
   getEscalationRunById,
   resolvePatientEscalationContext,
+  handlePatientEscalationTimeout,
+  getPatientTimeoutSec,
+  formatFamilyAlertMessage,
+  InMemoryEscalationQueueAdapter,
+  MockEscalationNotifier,
 }
 export type {
   EscalationPrismaClient,
@@ -38,6 +50,15 @@ export type {
   HandleEscalationRunInput,
   CancelEscalationRunInput,
 } from './escalation.service'
+
+export type {
+  EscalationTimeoutJobPayload,
+  EscalationQueueAdapter,
+  EscalationNotifier,
+  FamilyAlertMessageInput,
+  TimeoutExecutionDeps,
+  TimeoutExecutionResult,
+} from './timeout.service'
 
 export { reduceEscalation, InvalidTransitionError } from './state-machine'
 export type {
