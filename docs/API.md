@@ -283,6 +283,31 @@ Refresh JWT dengan `refreshToken` di body.
   - Sanitasi: `rawPayload` otomatis dibersihkan dari metadata perangkat keras (ID perangkat, serial number, IMEI, MAC address, token) sebelum disimpan (UU PDP).
   - Deduplikasi (AN-6): Event dengan kombinasi `(patientId, source, recordedAt)` yang sama bersifat idempoten (mengembalikan data yang sudah ada tanpa menduplikasi baris di DB).
 
+**POST /v1/dev/mock-anomaly (Dev Only — CL-203) — Request:**
+```json
+{
+  "patientId": "11111111-1111-4111-8111-111111111111", // opsional, default pasien smartwatch aktif
+  "type": "HIGH_HR",                                    // "HIGH_HR" | "LOW_HR" | "SPIKE" | "NORMAL"
+  "hrBpm": 145,                                         // opsional
+  "intervalSec": 20                                     // jeda bacaan dalam detik (default 20s)
+}
+```
+**Response 200:**
+```json
+{
+  "data": {
+    "triggered": true,
+    "patientId": "11111111-1111-4111-8111-111111111111",
+    "type": "HIGH_HR",
+    "readingsCount": 2,
+    "isAnomalous": true,
+    "anomalyReason": "hr>120",
+    "vitalIds": ["vital_1", "vital_2"]
+  }
+}
+```
+- Endpoint ini dilindungi guard dan **hanya aktif di lingkungan non-production** (`NODE_ENV !== 'production'`). Di production, route mengembalikan HTTP 404 Not Found (AGENTS.md §8).
+
 ### 3.5 Darurat (Fitur 4, 7)
 
 | Method | Path | Role | Deskripsi |
