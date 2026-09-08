@@ -310,12 +310,71 @@ Refresh JWT dengan `refreshToken` di body.
 
 ### 3.5 Darurat (Fitur 4, 7)
 
+- **Pemicu Otomatis (CL-204 / AC-4.1)**:
+  - Anomali tanda vital berurutan (≥2 bacaan abnormal dalam 60s dari `/v1/vitals` atau `/v1/dev/mock-anomaly`) otomatis membuat record `EmergencyAlert` dengan status `PENDING_PATIENT_CONFIRM`.
+  - Sistem memulai `EscalationRun` baru dengan context `EMERGENCY` dan status `WAITING_PATIENT` (CL-109).
+  - Pesan konfirmasi darurat "Apakah Anda aman?" otomatis dikirim ke nomor WhatsApp pasien (CL-102) dan notifikasi in-app dibuat pada tabel `Notification` dengan payload respons darurat.
+  - Timer timeout konfirmasi darurat (30–60 detik, default 45s dari `EMERGENCY_PATIENT_CONFIRM_SEC`) otomatis dijadwalkan pada queue adapter.
+  - Insiden dicatat ke audit log dengan action `emergency.triggered` (CL-010).
+
 | Method | Path | Role | Deskripsi |
 |---|---|---|---|
-| POST | `/v1/emergencies/:id/patient-response` | PATIENT | Pasien jawab "Saya aman" → resolusi |
-| GET | `/v1/emergencies/:id` | PATIENT, FAMILY(scope), NAKES(scope) | Status alert |
-| GET | `/v1/emergencies` | NAKES (scope), ADMIN | Feed alert (filter status) |
-| GET | `/v1/emergencies/active` | NAKES (scope) | Alert aktif (dashboard) |
+| GET | `/v1/emergencies/active` | NAKES (scope) | Daftar alert aktif (`PENDING_PATIENT_CONFIRM`, `ESCALATING`) |
+| GET | `/v1/emergencies/:id` | PATIENT, FAMILY(scope), NAKES(scope) | Detail status alert darurat dan eskalasi terkait |
+| POST | `/v1/emergencies/:id/patient-response` | PATIENT | Pasien jawab "Saya aman" → resolusi (CL-205) |
+| GET | `/v1/emergencies` | NAKES (scope), ADMIN | Feed riwayat alert (filter status) |
+
+**GET /v1/emergencies/active — Response 200:**
+```json
+{
+  "data": [
+    {
+      "id": "33333333-3333-4333-8333-333333333333",
+      "patientId": "11111111-1111-4111-8111-111111111111",
+      "status": "PENDING_PATIENT_CONFIRM",
+      "triggerType": "ANOMALY_HR",
+      "hrBpm": 145,
+      "triggeredAt": "2026-08-16T02:00:00.000Z",
+      "patient": {
+        "user": {
+          "id": "22222222-2222-4222-8222-222222222222",
+          "fullName": "Bu Siti Test",
+          "phone": "081234567890"
+        }
+      },
+      "escalationRun": {
+        "id": "44444444-4444-4444-8444-444444444444",
+        "status": "WAITING_PATIENT"
+      }
+    }
+  ]
+}
+```
+
+**GET /v1/emergencies/:id — Response 200:**
+```json
+{
+  "data": {
+    "id": "33333333-3333-4333-8333-333333333333",
+    "patientId": "11111111-1111-4111-8111-111111111111",
+    "status": "PENDING_PATIENT_CONFIRM",
+    "triggerType": "ANOMALY_HR",
+    "hrBpm": 145,
+    "triggeredAt": "2026-08-16T02:00:00.000Z",
+    "patient": {
+      "user": {
+        "fullName": "Bu Siti Test",
+        "phone": "081234567890"
+      }
+    },
+    "escalationRun": {
+      "id": "44444444-4444-4444-8444-444444444444",
+      "status": "WAITING_PATIENT",
+      "steps": []
+    }
+  }
+}
+```
 
 **POST /v1/emergencies/:id/patient-response — Request:**
 ```json

@@ -44,6 +44,8 @@ export function registerVitalsRoutes(app: FastifyInstance): void {
         isAnomalous: result.vitalSign.isAnomalous,
         anomalyReason: result.vitalSign.anomalyReason,
         recordedAt: result.vitalSign.recordedAt.toISOString(),
+        emergencyAlertId: result.emergencyAlert?.id ?? null,
+        escalationRunId: result.escalationRun?.id ?? null,
       },
     })
   })
@@ -102,6 +104,8 @@ export function registerVitalsRoutes(app: FastifyInstance): void {
     }
 
     const lastResult = results[results.length - 1]
+    const triggeredEmergency = results.find((r) => r.emergencyAlert)?.emergencyAlert
+    const triggeredEscalation = results.find((r) => r.escalationRun)?.escalationRun
 
     return reply.code(200).send({
       data: {
@@ -112,6 +116,8 @@ export function registerVitalsRoutes(app: FastifyInstance): void {
         isAnomalous: lastResult?.vitalSign.isAnomalous ?? false,
         anomalyReason: lastResult?.vitalSign.anomalyReason ?? null,
         vitalIds: results.map((r) => r.vitalSign.id),
+        emergencyAlertId: triggeredEmergency?.id ?? null,
+        escalationRunId: triggeredEscalation?.id ?? null,
       },
     })
   })
