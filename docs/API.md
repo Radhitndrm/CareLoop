@@ -269,15 +269,19 @@ Refresh JWT dengan `refreshToken` di body.
 ```json
 {
   "data": {
+    "id": "v1",
     "vitalId": "v1",
-    "isAnomalous": true,
-    "anomalyReason": "hr>120",
-    "emergencyCreated": true,
-    "emergencyId": "e1"
+    "status": "RECORDED",      // atau "DUPLICATE_IGNORED" saat event ganda (AN-6)
+    "isAnomalous": false,
+    "anomalyReason": null,
+    "recordedAt": "2026-08-16T02:00:00.000Z"
   }
 }
 ```
-- Service ini di-autentikasi via service token (bukan JWT user), dedup via `recordedAt + source`.
+- **Catatan Teknis (CL-201)**:
+  - Validasi eligibilitas: Pasien wajib mengaktifkan smartwatch (`smartwatchEnabled: true`). Jika tidak, permintaan ditolak HTTP 403 (AN-5).
+  - Sanitasi: `rawPayload` otomatis dibersihkan dari metadata perangkat keras (ID perangkat, serial number, IMEI, MAC address, token) sebelum disimpan (UU PDP).
+  - Deduplikasi (AN-6): Event dengan kombinasi `(patientId, source, recordedAt)` yang sama bersifat idempoten (mengembalikan data yang sudah ada tanpa menduplikasi baris di DB).
 
 ### 3.5 Darurat (Fitur 4, 7)
 
