@@ -11,6 +11,7 @@ import {
 } from '@careloop/shared'
 import {
   createEmergencyFromAnomaly,
+  handlePatientEmergencyResponse,
   getEmergencyTimeoutSec,
   formatPatientEmergencyConfirmationMessage,
   type EmergencyPrismaClient,
@@ -41,6 +42,8 @@ describe('emergency.service (CL-204)', () => {
             id: dummyPatientId,
             smartwatchEnabled: true,
             healthConditions: ['hipertensi'],
+            emergencyPreference: 'FAMILY_FIRST',
+            familyContacts: [{ tier: 'TIER_1', isActive: true }],
             user: {
               id: dummyUserId,
               fullName: patientName,
@@ -344,6 +347,239 @@ describe('emergency.service (CL-204)', () => {
       expect(ingestResult.emergencyAlert).toBeUndefined()
       expect(ingestResult.escalationRun).toBeUndefined()
       expect(mockEmergencyPrisma.emergencyAlert.create).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('handlePatientEmergencyResponse (CL-205)', () => {
+    it('melempar 404 jika alert darurat tidak ditemukan', async () => {
+      const mockPrisma = createMockEmergencyPrisma()
+      mockPrisma.emergencyAlert.findUnique = vi.fn().mockResolvedValue(null)
+
+      await expect(
+        handlePatientEmergencyResponse(mockPrisma, {
+          emergencyId: 'non-existent-id',
+          response: 'SAFE',
+        }),
+      ).rejects.toThrow('Emergency alert dengan ID non-existent-id tidak ditemukan')
+    })
+
+    it('respons SAFE: menyelesaikan emergency menjadi RESOLVED_SAFE dan keluarga TIDAK dialert (AC-4.2)', async () => {
+      const mockPrisma = createMockEmergencyPrisma()
+      const mockQueue = new InMemoryEscalationQueueAdapter()
+      const cancelSpy = vi.spyOn(mockQueue, 'cancelTimeout')
+
+      const alertRecord = {
+        id: dummyEmergencyId,
+        patientId: dummyPatientId,
+        status: EmergencyStatus.PENDING_PATIENT_CONFIRM,
+        patientConfirmedSafe: null,
+        notes: 'Anomali detak jantung',
+        escalationRun: {
+          id: dummyRunId,
+          patientId: dummyPatientId,
+          status: EscalationRunStatus.WAITING_PATIENT,
+          currentTier: null,
+          configSnapshot: { jobId: 'job-123' },
+          steps: [],
+        },
+        patient: {
+          id: dummyPatientId,
+          user: { id: dummyUserId, fullName: 'Bu Siti Test', phone: '081234567890' },
+        },
+      }
+
+      mockPrisma.emergencyAlert.findUnique = vi.fn().mockResolvedValue(alertRecord)
+      mockPrisma.emergencyAlert.update = vi.fn().mockImplementation(async ({ data }: any) => ({
+        ...alertRecord,
+        ...data,
+      }))
+      let runStatus = EscalationRunStatus.WAITING_PATIENT
+      mockPrisma.escalationRun.findUnique = vi.fn().mockImplementation(async () => ({
+        ...alertRecord.escalationRun,
+        status: runStatus,
+      }))
+      mockPrisma.escalationRun.update = vi.fn().mockImplementation(async ({ data }: any) => {
+        runStatus = data.status
+        return { ...alertRecord.escalationRun, ...data }
+      })
+
+      const result = await handlePatientEmergencyResponse(
+        mockPrisma,
+        {
+          emergencyId: dummyEmergencyId,
+          response: 'SAFE',
+          notes: 'Saya baru saja selesai olahraga',
+        },
+        { queueAdapter: mockQueue },
+      )
+
+      // 1. Verifikasi status EmergencyAlert menjadi RESOLVED_SAFE
+      expect(result.status).toBe(EmergencyStatus.RESOLVED_SAFE)
+      expect(result.patientConfirmedSafe).toBe(true)
+      expect(result.resolvedAt).toBeInstanceOf(Date)
+      expect(mockPrisma.emergencyAlert.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: dummyEmergencyId },
+          data: expect.objectContaining({
+            status: EmergencyStatus.RESOLVED_SAFE,
+            patientConfirmedSafe: true,
+          }),
+        }),
+      )
+
+      // 2. Verifikasi EscalationRun status diselesaikan (RESOLVED)
+      expect(result.escalationStatus).toBe('RESOLVED')
+
+      // 3. Verifikasi timer timeout dibatalkan
+      expect(cancelSpy).toHaveBeenCalledWith('job-123')
+
+      // 4. Verifikasi langkah dicatat di escalation_steps
+      expect(mockPrisma.escalationStep.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            runId: dummyRunId,
+            messageKey: 'emergency.patient_confirmed_safe',
+            response: 'ACK_HANDLE',
+          }),
+        }),
+      )
+
+      // 5. Verifikasi AuditLog dicatat
+      expect(mockPrisma.auditLog?.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: 'emergency.resolved',
+            resourceType: 'EmergencyAlert',
+            resourceId: dummyEmergencyId,
+          }),
+        }),
+      )
+    })
+
+    it('respons SAFE idempoten: memanggil ulang SAFE pada alert yang sudah RESOLVED_SAFE mengembalikan data yang sama', async () => {
+      const mockPrisma = createMockEmergencyPrisma()
+      const resolvedRecord = {
+        id: dummyEmergencyId,
+        patientId: dummyPatientId,
+        status: EmergencyStatus.RESOLVED_SAFE,
+        patientConfirmedSafe: true,
+        patientConfirmedAt: new Date(),
+        resolvedAt: new Date(),
+        updatedAt: new Date(),
+        escalationRun: {
+          id: dummyRunId,
+          status: EscalationRunStatus.RESOLVED,
+        },
+      }
+
+      mockPrisma.emergencyAlert.findUnique = vi.fn().mockResolvedValue(resolvedRecord)
+
+      const result = await handlePatientEmergencyResponse(mockPrisma, {
+        emergencyId: dummyEmergencyId,
+        response: 'SAFE',
+      })
+
+      expect(result.status).toBe(EmergencyStatus.RESOLVED_SAFE)
+      expect(result.patientConfirmedSafe).toBe(true)
+      expect(mockPrisma.emergencyAlert.update).not.toHaveBeenCalled()
+    })
+
+    it('respons NEED_HELP: langsung mempercepat eskalasi tanpa menunggu sisa timeout', async () => {
+      const mockPrisma = createMockEmergencyPrisma()
+      const mockQueue = new InMemoryEscalationQueueAdapter()
+      const cancelSpy = vi.spyOn(mockQueue, 'cancelTimeout')
+
+      const alertRecord = {
+        id: dummyEmergencyId,
+        patientId: dummyPatientId,
+        status: EmergencyStatus.PENDING_PATIENT_CONFIRM,
+        patientConfirmedSafe: null,
+        escalationRun: {
+          id: dummyRunId,
+          patientId: dummyPatientId,
+          status: EscalationRunStatus.WAITING_PATIENT,
+          currentTier: null,
+          configSnapshot: { jobId: 'job-patient-timeout' },
+          steps: [],
+        },
+        patient: {
+          id: dummyPatientId,
+          user: { id: dummyUserId, fullName: 'Bu Siti Test', phone: '081234567890' },
+          familyContacts: [{ tier: 'TIER_1', isActive: true }],
+        },
+      }
+
+      mockPrisma.emergencyAlert.findUnique = vi.fn().mockResolvedValue(alertRecord)
+      mockPrisma.emergencyAlert.update = vi.fn().mockImplementation(async ({ data }: any) => ({
+        ...alertRecord,
+        ...data,
+      }))
+      let runStatus = EscalationRunStatus.WAITING_PATIENT
+      let currentTier: any = null
+      mockPrisma.escalationRun.findUnique = vi.fn().mockImplementation(async () => ({
+        ...alertRecord.escalationRun,
+        status: runStatus,
+        currentTier,
+      }))
+      mockPrisma.escalationRun.update = vi.fn().mockImplementation(async ({ data }: any) => {
+        runStatus = data.status
+        currentTier = data.currentTier
+        return { ...alertRecord.escalationRun, ...data }
+      })
+
+      const result = await handlePatientEmergencyResponse(
+        mockPrisma,
+        {
+          emergencyId: dummyEmergencyId,
+          response: 'NEED_HELP',
+          notes: 'Dada terasa sesak',
+        },
+        { queueAdapter: mockQueue },
+      )
+
+      // 1. Verifikasi EmergencyAlert beralih ke status ESCALATING
+      expect(result.status).toBe(EmergencyStatus.ESCALATING)
+      expect(result.patientConfirmedSafe).toBe(false)
+      expect(mockPrisma.emergencyAlert.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: dummyEmergencyId },
+          data: expect.objectContaining({
+            status: EmergencyStatus.ESCALATING,
+            patientConfirmedSafe: false,
+          }),
+        }),
+      )
+
+      // 2. Verifikasi timer timeout pasien dibatalkan karena eskalasi dipercepat
+      expect(cancelSpy).toHaveBeenCalledWith('job-patient-timeout')
+
+      // 3. Verifikasi status eskalasi langsung dipercepat ke FAMILY_TIER_1
+      expect(result.escalationStatus).toBe(EscalationRunStatus.FAMILY_TIER_1)
+
+      // 4. Verifikasi langkah dicatat di escalation_steps
+      expect(mockPrisma.escalationStep.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            runId: dummyRunId,
+            messageKey: 'emergency.patient_requested_help',
+          }),
+        }),
+      )
+    })
+
+    it('menolak transisi ilegal jika alert sudah TIMED_OUT', async () => {
+      const mockPrisma = createMockEmergencyPrisma()
+      mockPrisma.emergencyAlert.findUnique = vi.fn().mockResolvedValue({
+        id: dummyEmergencyId,
+        status: EmergencyStatus.TIMED_OUT,
+      })
+
+      await expect(
+        handlePatientEmergencyResponse(mockPrisma, {
+          emergencyId: dummyEmergencyId,
+          response: 'SAFE',
+        }),
+      ).rejects.toThrow('Batas waktu konfirmasi darurat sudah habis (TIMED_OUT)')
     })
   })
 })

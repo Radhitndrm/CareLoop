@@ -14,6 +14,7 @@ describe('Emergency Routes (CL-204)', () => {
 
     const { buildApp } = await import('../../app')
     app = await buildApp({ logger: false })
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (cb: any) => cb(prisma))
   })
 
   describe('GET /v1/emergencies/active', () => {
@@ -100,6 +101,135 @@ describe('Emergency Routes (CL-204)', () => {
       const body = res.json()
       expect(body.error).toBeDefined()
       expect(body.error.code).toBe('NOT_FOUND')
+    })
+  })
+
+  describe('POST /v1/emergencies/:id/patient-response & /respond (CL-205)', () => {
+    it('menerima respons SAFE dan mengembalikan status RESOLVED_SAFE', async () => {
+      const existingAlert = {
+        id: dummyEmergencyId,
+        patientId: dummyPatientId,
+        status: EmergencyStatus.PENDING_PATIENT_CONFIRM,
+        notes: null,
+        escalationRun: {
+          id: 'run-1',
+          status: 'WAITING_PATIENT',
+          configSnapshot: { jobId: 'job-abc' },
+        },
+        patient: {
+          id: dummyPatientId,
+          user: { id: 'user-1', fullName: 'Bu Siti Test', phone: '081234567890' },
+        },
+      }
+
+      vi.spyOn(prisma.emergencyAlert, 'findUnique').mockResolvedValue(existingAlert as any)
+      vi.spyOn(prisma.emergencyAlert, 'update').mockImplementation((async ({ data }: any) => ({
+        ...existingAlert,
+        ...data,
+      })) as any)
+      vi.spyOn(prisma.patient, 'findUnique').mockResolvedValue(existingAlert.patient as any)
+      let runStatus = 'WAITING_PATIENT'
+      vi.spyOn(prisma.escalationRun, 'findUnique').mockImplementation((async () => ({
+        id: 'run-1',
+        patientId: dummyPatientId,
+        status: runStatus,
+        steps: [],
+      })) as any)
+      vi.spyOn(prisma.escalationRun, 'update').mockImplementation((async ({ data }: any) => {
+        runStatus = data.status
+        return { id: 'run-1', patientId: dummyPatientId, status: runStatus, steps: [] } as any
+      }) as any)
+      vi.spyOn(prisma.escalationStep, 'create').mockResolvedValue({} as any)
+      vi.spyOn(prisma.auditLog, 'create').mockResolvedValue({} as any)
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/emergencies/${dummyEmergencyId}/patient-response`,
+        payload: {
+          response: 'SAFE',
+          notes: 'Saya aman',
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const body = res.json()
+      expect(body.data).toBeDefined()
+      expect(body.data.status).toBe(EmergencyStatus.RESOLVED_SAFE)
+      expect(body.data.patientConfirmedSafe).toBe(true)
+    })
+
+    it('menerima respons NEED_HELP via alias route /respond dan mengembalikan status ESCALATING', async () => {
+      const existingAlert = {
+        id: dummyEmergencyId,
+        patientId: dummyPatientId,
+        status: EmergencyStatus.PENDING_PATIENT_CONFIRM,
+        notes: null,
+        escalationRun: {
+          id: 'run-1',
+          patientId: dummyPatientId,
+          status: 'WAITING_PATIENT',
+          currentTier: null,
+          configSnapshot: { jobId: 'job-abc' },
+        },
+        patient: {
+          id: dummyPatientId,
+          emergencyPreference: 'FAMILY_FIRST',
+          user: { id: 'user-1', fullName: 'Bu Siti Test', phone: '081234567890' },
+          familyContacts: [{ tier: 'TIER_1', isActive: true }],
+        },
+      }
+
+      vi.spyOn(prisma.emergencyAlert, 'findUnique').mockResolvedValue(existingAlert as any)
+      vi.spyOn(prisma.emergencyAlert, 'update').mockImplementation((async ({ data }: any) => ({
+        ...existingAlert,
+        ...data,
+      })) as any)
+      vi.spyOn(prisma.patient, 'findUnique').mockResolvedValue(existingAlert.patient as any)
+      let needHelpStatus = 'WAITING_PATIENT'
+      let needHelpTier: any = null
+      vi.spyOn(prisma.escalationRun, 'findUnique').mockImplementation((async () => ({
+        id: 'run-1',
+        patientId: dummyPatientId,
+        status: needHelpStatus,
+        currentTier: needHelpTier,
+        steps: [],
+      })) as any)
+      vi.spyOn(prisma.escalationRun, 'update').mockImplementation((async ({ data }: any) => {
+        needHelpStatus = data.status
+        needHelpTier = data.currentTier
+        return { id: 'run-1', patientId: dummyPatientId, status: needHelpStatus, currentTier: needHelpTier, steps: [] } as any
+      }) as any)
+      vi.spyOn(prisma.escalationStep, 'create').mockResolvedValue({} as any)
+      vi.spyOn(prisma.auditLog, 'create').mockResolvedValue({} as any)
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/emergencies/${dummyEmergencyId}/respond`,
+        payload: {
+          response: 'NEED_HELP',
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const body = res.json()
+      expect(body.data).toBeDefined()
+      expect(body.data.status).toBe(EmergencyStatus.ESCALATING)
+      expect(body.data.patientConfirmedSafe).toBe(false)
+    })
+
+    it('menolak payload dengan nilai response tidak valid (400)', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/emergencies/${dummyEmergencyId}/respond`,
+        payload: {
+          response: 'INVALID_STATUS',
+        },
+      })
+
+      expect(res.statusCode).toBe(400)
+      const body = res.json()
+      expect(body.error).toBeDefined()
+      expect(body.error.code).toBe('VALIDATION_ERROR')
     })
   })
 })
