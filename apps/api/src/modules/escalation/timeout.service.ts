@@ -115,12 +115,26 @@ export function getPatientTimeoutSec(
     return configSnapshot.patientWaitSec
   }
 
-  const env = getEnv()
-  // 2. Berdasarkan konteks (darurat 30-60 detik vs jadwal obat 30 menit)
-  if (context === 'EMERGENCY') {
-    return env.EMERGENCY_PATIENT_CONFIRM_SEC
+  // 2. Baca dari runtime env (getEnv) atau fallback aman jika dipanggil di luar konteks server penuh
+  try {
+    const env = getEnv()
+    if (context === 'EMERGENCY') {
+      return env.EMERGENCY_PATIENT_CONFIRM_SEC
+    }
+    return env.ESCALATION_PATIENT_WAIT_SEC
+  } catch {
+    const envSec = process.env.ESCALATION_PATIENT_WAIT_SEC
+      ? parseInt(process.env.ESCALATION_PATIENT_WAIT_SEC, 10)
+      : undefined
+    const emergencySec = process.env.EMERGENCY_PATIENT_CONFIRM_SEC
+      ? parseInt(process.env.EMERGENCY_PATIENT_CONFIRM_SEC, 10)
+      : undefined
+
+    if (context === 'EMERGENCY') {
+      return emergencySec && !Number.isNaN(emergencySec) ? emergencySec : 45
+    }
+    return envSec && !Number.isNaN(envSec) ? envSec : 1800
   }
-  return env.ESCALATION_PATIENT_WAIT_SEC
 }
 
 /** Menyusun teks pesan alert keluarga dengan instruksi menghubungi pasien (AC-3.3). */

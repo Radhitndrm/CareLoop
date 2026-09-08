@@ -7,7 +7,7 @@
 // 5. Anti-spam: hanya sekali per jendela eskalasi (AC-3.2).
 // 6. Pasien konfirmasi sebelum timeout -> tidak ada alert keluarga (AC-3.4).
 // 7. Persistensi lengkap ke Notification, EscalationStep, & AuditLog (CL-010).
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   handlePatientEscalationTimeout,
   getPatientTimeoutSec,
@@ -112,6 +112,11 @@ function createMockTimeoutPrisma(
 describe('CL-110: Timeout Pasien + Alert Keluarga', () => {
   const PATIENT_ID = 'patient-pak-haji'
   const RUN_ID = 'run-110'
+
+  beforeAll(() => {
+    process.env.DATABASE_URL ??= 'postgresql://localhost:5432/careloop_test?schema=public'
+    process.env.JWT_SECRET ??= 'test-secret-minimal-32-karakter-abcdefg'
+  })
 
   beforeEach(() => {
     vi.useFakeTimers()
