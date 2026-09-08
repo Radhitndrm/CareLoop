@@ -4,12 +4,20 @@ import { prisma } from '../../lib/prisma'
 import {
   ingestVitalSign,
   sanitizeRawPayload,
+  evaluatePatientVitalsAnomaly,
+  extractPatientThresholds,
   type VitalsPrismaClient,
   type IngestVitalResult,
+  type IngestVitalOptions,
 } from './vitals.service'
 
-export { ingestVitalSign, sanitizeRawPayload }
-export type { VitalsPrismaClient, IngestVitalResult }
+export {
+  ingestVitalSign,
+  sanitizeRawPayload,
+  evaluatePatientVitalsAnomaly,
+  extractPatientThresholds,
+}
+export type { VitalsPrismaClient, IngestVitalResult, IngestVitalOptions }
 
 export function registerVitalsRoutes(app: FastifyInstance): void {
   // POST /v1/vitals — Ingest event vital dari smartwatch/mock (docs/API.md §3.4 / CL-201)
