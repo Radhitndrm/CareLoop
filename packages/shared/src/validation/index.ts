@@ -79,8 +79,22 @@ export const createFamilyContactSchema = z.object({
   isNearby: z.boolean().default(false),
   canViewHealth: z.boolean().default(false),
   canReceiveEmergency: z.boolean().default(true),
+  consentGiven: z.boolean().default(true).optional(),
 })
-export type CreateFamilyContactInput = z.infer<typeof createFamilyContactSchema>
+export type CreateFamilyContactInput = z.input<typeof createFamilyContactSchema>
+
+export const updateFamilyContactSchema = z.object({
+  name: z.string().min(2).max(120).optional(),
+  phone: z.string().regex(/^08\d{8,13}$/, 'Nomor HP harus format Indonesia (08...)').optional(),
+  relationship: z.nativeEnum(Relationship).optional(),
+  tier: z.nativeEnum(FamilyTier).optional(),
+  priority: z.number().int().min(1).max(99).optional(),
+  isNearby: z.boolean().optional(),
+  canViewHealth: z.boolean().optional(),
+  canReceiveEmergency: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+})
+export type UpdateFamilyContactInput = z.infer<typeof updateFamilyContactSchema>
 
 export const createScheduleSchema = z.object({
   medicationId: uuidSchema,
