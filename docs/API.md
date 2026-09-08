@@ -322,6 +322,7 @@ Refresh JWT dengan `refreshToken` di body.
 | GET | `/v1/emergencies/active` | NAKES (scope) | Daftar alert aktif (`PENDING_PATIENT_CONFIRM`, `ESCALATING`) |
 | GET | `/v1/emergencies/:id` | PATIENT, FAMILY(scope), NAKES(scope) | Detail status alert darurat dan eskalasi terkait |
 | POST | `/v1/emergencies/:id/patient-response` | PATIENT | Pasien jawab "Saya aman" → resolusi (CL-205) |
+| POST | `/v1/emergencies/:id/timeout` | PATIENT, NAKES, ADMIN, INTERNAL | Pemicu timeout darurat (kirim alert WA keluarga/nakes + GPS + 112) (CL-206) |
 | GET | `/v1/emergencies` | NAKES (scope), ADMIN | Feed riwayat alert (filter status) |
 
 **GET /v1/emergencies/active — Response 200:**
@@ -385,6 +386,29 @@ Refresh JWT dengan `refreshToken` di body.
 { "data": { "emergencyId": "e1", "status": "RESOLVED_SAFE", "escalationRunId": null } }
 ```
 - Menyediakan `response: SAFE | NEED_HELP` (NEED_HELP → lanjut eskalasi langsung).
+
+**POST /v1/emergencies/:id/timeout — Request (opsional):**
+```json
+{ "notes": "Timeout konfirmasi pasien 45 detik tercapai" }
+```
+**Response 200:**
+```json
+{
+  "data": {
+    "emergencyId": "33333333-3333-4333-8333-333333333333",
+    "status": "ESCALATING",
+    "hasLocation": true,
+    "locationLat": "-6.2088000",
+    "locationLng": "106.8456000",
+    "notifiedFamilyCount": 2,
+    "notifiedNakesCount": 0,
+    "tel112": "tel:112",
+    "alertSentToFamilyAt": "2026-08-16T02:00:45.000Z"
+  }
+}
+```
+- Mengirim pesan WhatsApp ke seluruh kontak keluarga aktif terurut tier dengan link Google Maps dan nomor darurat `tel:112` (one-tap call manual, tanpa auto-dial).
+- Jika pasien tinggal sendiri (`livingSituation = ALONE`) tanpa kontak keluarga tier-1, alert darurat langsung dieskalasi ke kontak nakes pembina (`alertSentToNakesAt`) dan notifikasi dashboard prioritas tinggi.
 
 ### 3.6 Eskalasi (Fitur 3, 7)
 

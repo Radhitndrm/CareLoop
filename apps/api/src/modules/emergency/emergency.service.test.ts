@@ -12,6 +12,10 @@ import {
 import {
   createEmergencyFromAnomaly,
   handlePatientEmergencyResponse,
+  handleEmergencyTimeout,
+  formatEmergencyLocation,
+  formatEmergencyFamilyAlertMessage,
+  formatEmergencyNakesAlertMessage,
   getEmergencyTimeoutSec,
   formatPatientEmergencyConfirmationMessage,
   type EmergencyPrismaClient,
@@ -19,7 +23,7 @@ import {
 import { ingestVitalSign } from '../vitals/vitals.service'
 import { InMemoryEscalationQueueAdapter } from '../escalation/timeout.service'
 
-describe('emergency.service (CL-204)', () => {
+describe('emergency.service (CL-204 & CL-206)', () => {
   const dummyPatientId = '11111111-1111-4111-8111-111111111111'
   const dummyUserId = '22222222-2222-4222-8222-222222222222'
   const dummyEmergencyId = '33333333-3333-4333-8333-333333333333'
@@ -29,10 +33,18 @@ describe('emergency.service (CL-204)', () => {
     patientExists?: boolean
     patientPhone?: string
     patientName?: string
+    livingSituation?: string
+    emergencyPreference?: string
+    lastKnownLat?: number | null
+    lastKnownLng?: number | null
+    familyContacts?: any[]
+    nakesContacts?: any[]
   }): EmergencyPrismaClient {
     const patientExists = options?.patientExists ?? true
     const patientPhone = options?.patientPhone ?? '081234567890'
     const patientName = options?.patientName ?? 'Bu Siti Test'
+
+    let currentRunStatus = EscalationRunStatus.WAITING_PATIENT
 
     return {
       patient: {
@@ -42,8 +54,16 @@ describe('emergency.service (CL-204)', () => {
             id: dummyPatientId,
             smartwatchEnabled: true,
             healthConditions: ['hipertensi'],
-            emergencyPreference: 'FAMILY_FIRST',
-            familyContacts: [{ tier: 'TIER_1', isActive: true }],
+            emergencyPreference: options?.emergencyPreference ?? 'FAMILY_FIRST',
+            livingSituation: options?.livingSituation ?? 'WITH_FAMILY',
+            lastKnownLat: options?.lastKnownLat !== undefined ? options.lastKnownLat : null,
+            lastKnownLng: options?.lastKnownLng !== undefined ? options.lastKnownLng : null,
+            familyContacts: options?.familyContacts ?? [
+              { id: 'fc-1', name: 'Budi (Anak)', phone: '08111111111', tier: 'TIER_1', priority: 1, isActive: true },
+            ],
+            nakesContacts: options?.nakesContacts ?? [
+              { id: 'nc-1', nakesName: 'Bidan Siti', phone: '08222222222', isPrimary: true, isActive: true },
+            ],
             user: {
               id: dummyUserId,
               fullName: patientName,
@@ -74,7 +94,7 @@ describe('emergency.service (CL-204)', () => {
             patientId: dummyPatientId,
             context: EscalationContext.EMERGENCY,
             sourceEmergencyId: dummyEmergencyId,
-            status: EscalationRunStatus.WAITING_PATIENT,
+            status: currentRunStatus,
             steps: [],
           }
         }),
@@ -86,7 +106,19 @@ describe('emergency.service (CL-204)', () => {
             updatedAt: new Date(),
           }
         }),
-        update: vi.fn(),
+        update: vi.fn().mockImplementation(async ({ data }: any) => {
+          if (data.status) {
+            currentRunStatus = data.status
+          }
+          return {
+            id: dummyRunId,
+            patientId: dummyPatientId,
+            context: EscalationContext.EMERGENCY,
+            sourceEmergencyId: dummyEmergencyId,
+            status: currentRunStatus,
+            ...data,
+          }
+        }),
       },
       escalationStep: {
         create: vi.fn().mockImplementation(async ({ data }: any) => {
@@ -580,6 +612,422 @@ describe('emergency.service (CL-204)', () => {
           response: 'SAFE',
         }),
       ).rejects.toThrow('Batas waktu konfirmasi darurat sudah habis (TIMED_OUT)')
+    })
+  })
+
+  describe('CL-206: formatEmergencyLocation & Message Formatters', () => {
+    it('formatEmergencyLocation menyusun tautan Google Maps saat koordinat tersedia (AC-4.3)', () => {
+      const result = formatEmergencyLocation(-6.2088, 106.8456)
+      expect(result.hasLocation).toBe(true)
+      expect(result.mapsUrl).toBe('https://maps.google.com/?q=-6.2088,106.8456')
+      expect(result.locationText).toContain('https://maps.google.com/?q=-6.2088,106.8456')
+    })
+
+    it('formatEmergencyLocation menggunakan fallback saat koordinat null/kosong (AC-4.3)', () => {
+      const result = formatEmergencyLocation(null, null)
+      expect(result.hasLocation).toBe(false)
+      expect(result.mapsUrl).toBeUndefined()
+      expect(result.locationText).toBe('Lokasi pasien tidak tersedia')
+    })
+
+    it('formatEmergencyFamilyAlertMessage memuat nama, kondisi, lokasi, dan deep link tel:112 tanpa auto-dial (AC-4.3, AC-4.6)', () => {
+      const msg = formatEmergencyFamilyAlertMessage({
+        patientName: 'Pak Budi',
+        patientPhone: '08123456789',
+        hrBpm: 135,
+        locationText: 'Lokasi terakhir: https://maps.google.com/?q=-6.2,106.8',
+        mapsUrl: 'https://maps.google.com/?q=-6.2,106.8',
+      })
+
+      expect(msg.tel112).toBe('tel:112')
+      expect(msg.body).toContain('Pak Budi')
+      expect(msg.body).toContain('135 bpm')
+      expect(msg.body).toContain('tel:112')
+      expect(msg.body).toContain('https://maps.google.com/?q=-6.2,106.8')
+    })
+
+    it('formatEmergencyNakesAlertMessage menyertakan tag ALONE jika pasien tinggal sendiri (AC-4.5, AC-4.6)', () => {
+      const msg = formatEmergencyNakesAlertMessage({
+        patientName: 'Nenek Aminah',
+        patientPhone: '08987654321',
+        hrBpm: 45,
+        locationText: 'Lokasi pasien tidak tersedia',
+        livingSituation: 'ALONE',
+      })
+
+      expect(msg.tel112).toBe('tel:112')
+      expect(msg.body).toContain('Nenek Aminah')
+      expect(msg.body).toContain('ALONE')
+      expect(msg.body).toContain('tel:112')
+    })
+  })
+
+  describe('CL-206: handleEmergencyTimeout', () => {
+    it('saat timeout dengan lokasi GPS: update status ESCALATING, simpan lokasi, kirim alert WA keluarga + tel:112 (AC-4.3, AC-4.4, AC-4.6, AC-4.7)', async () => {
+      const mockPrisma = createMockEmergencyPrisma({
+        lastKnownLat: -6.2088,
+        lastKnownLng: 106.8456,
+        familyContacts: [
+          { id: 'fc-1', name: 'Dewi (Anak)', phone: '081299998888', tier: 'TIER_1', priority: 1, isActive: true },
+        ],
+      })
+
+      mockPrisma.emergencyAlert.findUnique = vi.fn().mockResolvedValue({
+        id: dummyEmergencyId,
+        patientId: dummyPatientId,
+        hrBpm: 140,
+        status: EmergencyStatus.PENDING_PATIENT_CONFIRM,
+        notes: 'Anomali detak jantung tinggi',
+        patient: {
+          id: dummyPatientId,
+          livingSituation: 'WITH_FAMILY',
+          lastKnownLat: -6.2088,
+          lastKnownLng: 106.8456,
+          user: { id: dummyUserId, fullName: 'Bu Siti Test', phone: '081234567890' },
+          familyContacts: [
+            { id: 'fc-1', name: 'Dewi (Anak)', phone: '081299998888', tier: 'TIER_1', priority: 1, isActive: true },
+          ],
+          nakesContacts: [],
+        },
+        escalationRun: {
+          id: dummyRunId,
+          status: EscalationRunStatus.WAITING_PATIENT,
+          steps: [],
+        },
+      })
+
+      mockPrisma.emergencyAlert.update = vi.fn().mockImplementation(async ({ data }: any) => ({
+        id: dummyEmergencyId,
+        ...data,
+      }))
+
+      mockPrisma.escalationRun.update = vi.fn().mockImplementation(async ({ data }: any) => ({
+        id: dummyRunId,
+        ...data,
+      }))
+
+      const sentWa: any[] = []
+      const mockWaService = {
+        sendText: vi.fn().mockImplementation(async (to: string, text: string) => {
+          sentWa.push({ to, text })
+          return { providerMessageId: 'wa-msg-123' }
+        }),
+      }
+
+      const result = await handleEmergencyTimeout(
+        mockPrisma,
+        { emergencyId: dummyEmergencyId },
+        { whatsAppService: mockWaService as any },
+      )
+
+      // 1. Verifikasi hasil dan status darurat
+      expect(result.emergencyId).toBe(dummyEmergencyId)
+      expect(result.status).toBe(EmergencyStatus.ESCALATING)
+      expect(result.hasLocation).toBe(true)
+      expect(result.locationLat).toBe('-6.2088')
+      expect(result.locationLng).toBe('106.8456')
+      expect(result.notifiedFamilyCount).toBe(1)
+      expect(result.tel112).toBe('tel:112')
+
+      // 2. Verifikasi update tabel EmergencyAlert (AC-4.3, AC-4.7)
+      expect(mockPrisma.emergencyAlert.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: dummyEmergencyId },
+          data: expect.objectContaining({
+            status: EmergencyStatus.ESCALATING,
+            locationLat: -6.2088,
+            locationLng: 106.8456,
+            alertSentToFamilyAt: expect.any(Date),
+          }),
+        }),
+      )
+
+      // 3. Verifikasi pesan WhatsApp terkirim ke keluarga dengan link maps dan tel:112 (AC-4.3, AC-4.6)
+      expect(mockWaService.sendText).toHaveBeenCalledTimes(1)
+      expect(sentWa[0].to).toBe('081299998888')
+      expect(sentWa[0].text).toContain('https://maps.google.com/?q=-6.2088,106.8456')
+      expect(sentWa[0].text).toContain('tel:112')
+
+      // 4. Verifikasi notifikasi tersimpan dengan payload tel112 (AC-4.6)
+      expect(mockPrisma.notification!.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            channel: Channel.WHATSAPP,
+            type: NotificationType.EMERGENCY,
+            payload: expect.objectContaining({
+              tel112: 'tel:112',
+              hasAutoDial: false,
+              hasLocation: true,
+            }),
+          }),
+        }),
+      )
+
+      // 5. Verifikasi escalation_steps dan audit_logs terisi (AC-4.7)
+      expect(mockPrisma.escalationStep.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            runId: dummyRunId,
+            tier: 'TIER_1',
+            messageKey: 'emergency.alert_family',
+          }),
+        }),
+      )
+      expect(mockPrisma.auditLog!.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: 'escalation.step',
+            resourceType: 'EmergencyAlert',
+            meta: expect.objectContaining({
+              event: 'EMERGENCY_TIMEOUT',
+              hasLocation: true,
+              tel112: 'tel:112',
+            }),
+          }),
+        }),
+      )
+    })
+
+    it('saat timeout tanpa lokasi GPS: kirim pesan fallback "Lokasi pasien tidak tersedia" (AC-4.3)', async () => {
+      const mockPrisma = createMockEmergencyPrisma({
+        lastKnownLat: null,
+        lastKnownLng: null,
+      })
+
+      mockPrisma.emergencyAlert.findUnique = vi.fn().mockResolvedValue({
+        id: dummyEmergencyId,
+        patientId: dummyPatientId,
+        hrBpm: 130,
+        status: EmergencyStatus.PENDING_PATIENT_CONFIRM,
+        patient: {
+          id: dummyPatientId,
+          livingSituation: 'WITH_FAMILY',
+          lastKnownLat: null,
+          lastKnownLng: null,
+          user: { id: dummyUserId, fullName: 'Bu Siti Test', phone: '081234567890' },
+          familyContacts: [
+            { id: 'fc-1', name: 'Dewi (Anak)', phone: '081299998888', tier: 'TIER_1', priority: 1, isActive: true },
+          ],
+          nakesContacts: [],
+        },
+        escalationRun: {
+          id: dummyRunId,
+          status: EscalationRunStatus.WAITING_PATIENT,
+          steps: [],
+        },
+      })
+
+      mockPrisma.emergencyAlert.update = vi.fn().mockImplementation(async ({ data }: any) => ({
+        id: dummyEmergencyId,
+        ...data,
+      }))
+      mockPrisma.escalationRun.update = vi.fn().mockImplementation(async ({ data }: any) => ({
+        id: dummyRunId,
+        ...data,
+      }))
+
+      const sentWa: any[] = []
+      const mockWaService = {
+        sendText: vi.fn().mockImplementation(async (to: string, text: string) => {
+          sentWa.push({ to, text })
+          return { providerMessageId: 'wa-msg-fallback' }
+        }),
+      }
+
+      const result = await handleEmergencyTimeout(
+        mockPrisma,
+        { emergencyId: dummyEmergencyId },
+        { whatsAppService: mockWaService as any },
+      )
+
+      expect(result.hasLocation).toBe(false)
+      expect(result.locationLat).toBeNull()
+      expect(result.locationLng).toBeNull()
+      expect(sentWa[0].text).toContain('Lokasi pasien tidak tersedia')
+      expect(sentWa[0].text).toContain('tel:112')
+    })
+
+    it('mengirim alert ke semua kontak keluarga aktif terurut tier (AC-4.4)', async () => {
+      const contacts = [
+        { id: 'fc-2', name: 'Pak RT (Tier 2)', phone: '08222222222', tier: 'TIER_2', priority: 1, isActive: true },
+        { id: 'fc-1', name: 'Budi (Anak Tier 1)', phone: '08111111111', tier: 'TIER_1', priority: 1, isActive: true },
+      ]
+
+      const mockPrisma = createMockEmergencyPrisma({
+        familyContacts: contacts,
+      })
+
+      mockPrisma.emergencyAlert.findUnique = vi.fn().mockResolvedValue({
+        id: dummyEmergencyId,
+        patientId: dummyPatientId,
+        hrBpm: 125,
+        status: EmergencyStatus.PENDING_PATIENT_CONFIRM,
+        patient: {
+          id: dummyPatientId,
+          livingSituation: 'WITH_FAMILY',
+          user: { id: dummyUserId, fullName: 'Bu Siti Test', phone: '081234567890' },
+          familyContacts: contacts,
+          nakesContacts: [],
+        },
+        escalationRun: {
+          id: dummyRunId,
+          status: EscalationRunStatus.WAITING_PATIENT,
+          steps: [],
+        },
+      })
+
+      mockPrisma.emergencyAlert.update = vi.fn().mockImplementation(async ({ data }: any) => ({
+        id: dummyEmergencyId,
+        ...data,
+      }))
+      mockPrisma.escalationRun.update = vi.fn().mockImplementation(async ({ data }: any) => ({
+        id: dummyRunId,
+        ...data,
+      }))
+
+      const calledPhones: string[] = []
+      const mockWaService = {
+        sendText: vi.fn().mockImplementation(async (to: string) => {
+          calledPhones.push(to)
+          return { providerMessageId: 'wa-tier-msg' }
+        }),
+      }
+
+      const result = await handleEmergencyTimeout(
+        mockPrisma,
+        { emergencyId: dummyEmergencyId },
+        { whatsAppService: mockWaService as any },
+      )
+
+      expect(result.notifiedFamilyCount).toBe(2)
+      // TIER_1 (08111111111) wajib dinotifikasi sebelum TIER_2 (08222222222)
+      expect(calledPhones[0]).toBe('08111111111')
+      expect(calledPhones[1]).toBe('08222222222')
+    })
+
+    it('pasien living_situation=alone tanpa tier-1 langsung dieskalasi ke nakes (AC-4.5)', async () => {
+      const nakesList = [
+        { id: 'nc-1', nakesName: 'Bidan Ratna', phone: '087777777777', nakesUserId: 'u-nakes-1', isPrimary: true, isActive: true },
+      ]
+
+      const mockPrisma = createMockEmergencyPrisma({
+        livingSituation: 'ALONE',
+        familyContacts: [], // tidak ada kontak tier-1
+        nakesContacts: nakesList,
+      })
+
+      mockPrisma.emergencyAlert.findUnique = vi.fn().mockResolvedValue({
+        id: dummyEmergencyId,
+        patientId: dummyPatientId,
+        hrBpm: 145,
+        status: EmergencyStatus.PENDING_PATIENT_CONFIRM,
+        patient: {
+          id: dummyPatientId,
+          livingSituation: 'ALONE',
+          user: { id: dummyUserId, fullName: 'Kakek Joyo', phone: '081234567890' },
+          familyContacts: [],
+          nakesContacts: nakesList,
+        },
+        escalationRun: {
+          id: dummyRunId,
+          status: EscalationRunStatus.WAITING_PATIENT,
+          steps: [],
+        },
+      })
+
+      mockPrisma.emergencyAlert.update = vi.fn().mockImplementation(async ({ data }: any) => ({
+        id: dummyEmergencyId,
+        ...data,
+      }))
+
+      const sentWa: any[] = []
+      const mockWaService = {
+        sendText: vi.fn().mockImplementation(async (to: string, text: string) => {
+          sentWa.push({ to, text })
+          return { providerMessageId: 'wa-nakes-1' }
+        }),
+      }
+
+      const result = await handleEmergencyTimeout(
+        mockPrisma,
+        { emergencyId: dummyEmergencyId },
+        { whatsAppService: mockWaService as any },
+      )
+
+      // 1. Verifikasi eskalasi langsung ke NAKES (tanpa menunggu tier keluarga)
+      expect(result.escalationStatus).toBe(EscalationRunStatus.NAKES)
+      expect(result.notifiedNakesCount).toBe(1)
+      expect(result.notifiedFamilyCount).toBe(0)
+
+      // 2. Verifikasi pesan alert WA terkirim ke kontak nakes pembina
+      expect(mockWaService.sendText).toHaveBeenCalledWith('087777777777', expect.stringContaining('ALONE'))
+
+      // 3. Verifikasi tabel EmergencyAlert mencatat alertSentToNakesAt
+      expect(mockPrisma.emergencyAlert.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            alertSentToNakesAt: expect.any(Date),
+          }),
+        }),
+      )
+
+      // 4. Verifikasi notifikasi IN_APP nakes dashboard terbuat dengan priority HIGH
+      expect(mockPrisma.notification!.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            channel: Channel.IN_APP,
+            type: NotificationType.EMERGENCY,
+            payload: expect.objectContaining({
+              priority: 'HIGH',
+              livingSituation: 'ALONE',
+              tel112: 'tel:112',
+            }),
+          }),
+        }),
+      )
+    })
+
+    it('mengabaikan timeout secara idempoten jika status sudah RESOLVED_SAFE (AC-4.2)', async () => {
+      const mockPrisma = createMockEmergencyPrisma()
+      mockPrisma.emergencyAlert.findUnique = vi.fn().mockResolvedValue({
+        id: dummyEmergencyId,
+        status: EmergencyStatus.RESOLVED_SAFE,
+        patient: { id: dummyPatientId },
+      })
+
+      const mockWaService = { sendText: vi.fn() }
+
+      const result = await handleEmergencyTimeout(
+        mockPrisma,
+        { emergencyId: dummyEmergencyId },
+        { whatsAppService: mockWaService as any },
+      )
+
+      expect(result.skipped).toBe(true)
+      expect(result.reason).toBe('EMERGENCY_ALREADY_RESOLVED')
+      expect(mockWaService.sendText).not.toHaveBeenCalled()
+    })
+
+    it('mencegah spam ganda jika alert sudah ESCALATING dan alert sudah terkirim', async () => {
+      const mockPrisma = createMockEmergencyPrisma()
+      mockPrisma.emergencyAlert.findUnique = vi.fn().mockResolvedValue({
+        id: dummyEmergencyId,
+        status: EmergencyStatus.ESCALATING,
+        alertSentToFamilyAt: new Date(),
+        patient: { id: dummyPatientId },
+      })
+
+      const mockWaService = { sendText: vi.fn() }
+
+      const result = await handleEmergencyTimeout(
+        mockPrisma,
+        { emergencyId: dummyEmergencyId },
+        { whatsAppService: mockWaService as any },
+      )
+
+      expect(result.skipped).toBe(true)
+      expect(result.reason).toBe('EMERGENCY_ALREADY_ESCALATED')
+      expect(mockWaService.sendText).not.toHaveBeenCalled()
     })
   })
 })

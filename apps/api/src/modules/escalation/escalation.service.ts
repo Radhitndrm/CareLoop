@@ -146,6 +146,7 @@ export async function resolvePatientEscalationContext(
     where: { id: patientId },
     select: {
       emergencyPreference: true,
+      livingSituation: true,
       familyContacts: {
         where: { isActive: true },
         select: { tier: true },
@@ -161,8 +162,14 @@ export async function resolvePatientEscalationContext(
     (c: { tier: string; isActive?: boolean }) => c.isActive !== false,
   )
   const hasTier1 = contacts.some((c: { tier: string }) => c.tier === 'TIER_1')
-  const hasTier2 = contacts.some((c: { tier: string }) => c.tier === 'TIER_2')
-  const nakesFirst = patient.emergencyPreference === 'NAKES_FIRST'
+  let hasTier2 = contacts.some((c: { tier: string }) => c.tier === 'TIER_2')
+  let nakesFirst = patient.emergencyPreference === 'NAKES_FIRST'
+
+  // AC-4.5: Pasien dengan living_situation=alone dan tanpa family tier-1 aktif -> alert nakes otomatis (langsung nakes)
+  if (patient.livingSituation === 'ALONE' && !hasTier1) {
+    nakesFirst = true
+    hasTier2 = false
+  }
 
   return { hasTier1, hasTier2, nakesFirst }
 }

@@ -6,6 +6,10 @@ import { emergencyPatientResponseSchema } from '@careloop/shared'
 import {
   createEmergencyFromAnomaly,
   handlePatientEmergencyResponse,
+  handleEmergencyTimeout,
+  formatEmergencyLocation,
+  formatEmergencyFamilyAlertMessage,
+  formatEmergencyNakesAlertMessage,
   getEmergencyTimeoutSec,
   formatPatientEmergencyConfirmationMessage,
   defaultEmergencyQueueAdapter,
@@ -13,6 +17,11 @@ import {
   type CreateEmergencyResult,
   type PatientEmergencyResponseInput,
   type PatientEmergencyResponseResult,
+  type HandleEmergencyTimeoutInput,
+  type HandleEmergencyTimeoutResult,
+  type EmergencyLocationResult,
+  type EmergencyAlertFamilyMessageInput,
+  type EmergencyAlertNakesMessageInput,
   type EmergencyExecutionDeps,
   type EmergencyPrismaClient,
 } from './emergency.service'
@@ -20,6 +29,10 @@ import {
 export {
   createEmergencyFromAnomaly,
   handlePatientEmergencyResponse,
+  handleEmergencyTimeout,
+  formatEmergencyLocation,
+  formatEmergencyFamilyAlertMessage,
+  formatEmergencyNakesAlertMessage,
   getEmergencyTimeoutSec,
   formatPatientEmergencyConfirmationMessage,
   defaultEmergencyQueueAdapter,
@@ -29,6 +42,11 @@ export type {
   CreateEmergencyResult,
   PatientEmergencyResponseInput,
   PatientEmergencyResponseResult,
+  HandleEmergencyTimeoutInput,
+  HandleEmergencyTimeoutResult,
+  EmergencyLocationResult,
+  EmergencyAlertFamilyMessageInput,
+  EmergencyAlertNakesMessageInput,
   EmergencyExecutionDeps,
   EmergencyPrismaClient,
 }
@@ -114,4 +132,18 @@ export function registerEmergencyRoutes(app: FastifyInstance): void {
 
   // POST /v1/emergencies/:id/respond (alias kontrak issue #32)
   app.post('/v1/emergencies/:id/respond', handleResponse)
+
+  // POST /v1/emergencies/:id/timeout — Memicu penanganan timeout darurat (CL-206)
+  app.post('/v1/emergencies/:id/timeout', async (req: any, reply: any) => {
+    const params = emergencyParamsSchema.parse(req.params)
+    const body = z.object({ notes: z.string().max(280).optional() }).parse(req.body ?? {})
+
+    const result = await handleEmergencyTimeout(prisma, {
+      emergencyId: params.id,
+      notes: body.notes,
+      actorUserId: (req.user as any)?.sub ?? null,
+    })
+
+    return reply.code(200).send({ data: result })
+  })
 }
