@@ -468,6 +468,28 @@ describe('CL-109: EscalationService — Persistensi Escalation Run & Step', () =
       expect(ctx.nakesFirst).toBe(true)
     })
 
+    it('pasien livingSituation=ALONE tanpa kontak keluarga tier-1 otomatis memprioritaskan nakes (AC-4.5)', async () => {
+      const client = createMockPrisma({
+        patients: [
+          {
+            id: 'patient-alone',
+            emergencyPreference: 'FAMILY_FIRST',
+            livingSituation: 'ALONE',
+            familyContacts: [
+              { id: 'c3', tier: 'TIER_2', isActive: true }, // hanya ada tier 2
+            ],
+          },
+        ],
+      })
+
+      const ctx = await resolvePatientEscalationContext(client, 'patient-alone')
+
+      expect(ctx.hasTier1).toBe(false)
+      // AC-4.5: Langsung eskalasi ke nakes tanpa menunggu tier keluarga
+      expect(ctx.hasTier2).toBe(false)
+      expect(ctx.nakesFirst).toBe(true)
+    })
+
     it('melempar 404 jika pasien tidak ditemukan', async () => {
       const client = createMockPrisma()
       await expect(resolvePatientEscalationContext(client, 'non-existent')).rejects.toThrow(ApiError)
