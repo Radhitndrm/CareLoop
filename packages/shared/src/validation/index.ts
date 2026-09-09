@@ -60,6 +60,8 @@ export type ComplianceDeferInput = z.infer<typeof complianceDeferSchema>
 export const emergencyPatientResponseSchema = z.object({
   response: z.enum(['SAFE', 'NEED_HELP']),
   notes: z.string().max(280).optional(),
+  locationLat: z.number().min(-90).max(90).optional(),
+  locationLng: z.number().min(-180).max(180).optional(),
 })
 export type EmergencyPatientResponseInput = z.infer<typeof emergencyPatientResponseSchema>
 
