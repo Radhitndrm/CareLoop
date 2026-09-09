@@ -21,6 +21,18 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
     const { buildApp } = await import('../../app')
     app = await buildApp({ logger: false })
     vi.spyOn(prisma, '$transaction').mockImplementation(async (cb: any) => cb(prisma))
+    if (prisma.auditLog) {
+      vi.spyOn(prisma.auditLog, 'create').mockResolvedValue({ id: 'audit-default' } as any)
+    }
+    if (prisma.notification) {
+      vi.spyOn(prisma.notification, 'create').mockResolvedValue({ id: 'notif-default' } as any)
+    }
+    if (prisma.familyContact) {
+      vi.spyOn(prisma.familyContact, 'findMany').mockResolvedValue([])
+    }
+    if (prisma.nakesContact) {
+      vi.spyOn(prisma.nakesContact, 'findMany').mockResolvedValue([])
+    }
   })
 
   describe('GET /v1/escalations/active', () => {
@@ -351,6 +363,18 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       vi.spyOn(prisma.escalationStep, 'create').mockResolvedValue({
         id: 'step-new',
       } as any)
+
+      vi.spyOn(prisma.familyContact, 'findMany').mockResolvedValue([
+        {
+          id: 'fc-1',
+          patientId: dummyPatientId,
+          name: 'Budi (Anak Tier 1)',
+          phone: '081299990001',
+          tier: 'TIER_1',
+          priority: 1,
+          isActive: true,
+        },
+      ] as any)
 
       const res = await app.inject({
         method: 'POST',
