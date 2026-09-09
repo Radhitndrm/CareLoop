@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 
+export * from './ws'
+
 export function registerDashboardRoutes(app: FastifyInstance): void {
   app.get('/v1/dashboard/summary', async () => {
     return {

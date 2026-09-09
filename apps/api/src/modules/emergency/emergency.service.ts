@@ -30,6 +30,8 @@ import {
   InMemoryEscalationQueueAdapter,
   type EscalationQueueAdapter,
 } from '../escalation/timeout.service'
+import type { Server as SocketIOServer } from 'socket.io'
+import { getDashboardWsServer, emitPriorityEmergency } from '../dashboard/ws'
 
 export interface CreateEmergencyInput {
   patientId: string
@@ -46,6 +48,7 @@ export interface CreateEmergencyInput {
 export interface EmergencyExecutionDeps {
   whatsAppService?: WhatsAppService
   queueAdapter?: EscalationQueueAdapter
+  wsServer?: SocketIOServer | null
   now?: () => Date
 }
 
@@ -992,6 +995,28 @@ export async function handleEmergencyTimeout(
           status: NotificationStatus.SENT,
           sentAt: currentTime,
         },
+      })
+    }
+
+    // Siarkan alert darurat prioritas via WebSocket ke dashboard nakes (CL-208 / ADR-004)
+    const ws = deps?.wsServer ?? getDashboardWsServer()
+    if (ws) {
+      emitPriorityEmergency(ws, {
+        emergencyId: emergency.id,
+        triggeredAt: emergency.triggeredAt ? emergency.triggeredAt.toISOString() : currentTime.toISOString(),
+        triggerType: emergency.triggerType,
+        hrBpm: emergency.hrBpm,
+        patient: {
+          id: patient?.id ?? emergency.patientId,
+          fullName: patientName,
+          livingSituation: patient?.livingSituation,
+        },
+        location: lastLat && lastLng ? { lat: Number(lastLat), lng: Number(lastLng) } : null,
+        escalationRunId: emergency.escalationRun?.id ?? null,
+        tier: 'NAKES',
+        actionUrl: `/dashboard/alerts/${emergency.id}`,
+        puskesmasId: patient?.nakesContacts?.[0]?.puskesmasId ?? null,
+        districtCode: patient?.districtCode ?? null,
       })
     }
   }

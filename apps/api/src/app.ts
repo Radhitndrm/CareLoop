@@ -8,11 +8,14 @@ import { getEnv } from './lib/env'
 import { registerErrorHandler } from './lib/errors'
 import { registerRoutes } from './routes'
 
+import { createDashboardWsServer, getDashboardWsServer, setDashboardWsServer } from './modules/dashboard/ws'
+
 export interface BuildAppOptions {
   logger?: boolean
   jwtSecret?: string
   rateLimitMax?: number
   corsOrigins?: string[]
+  enableWs?: boolean
 }
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -45,6 +48,31 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   }))
 
   registerRoutes(app)
+
+  if (opts.enableWs !== false) {
+    let ioInstance: ReturnType<typeof createDashboardWsServer> | null = null
+
+    app.addHook('onReady', async () => {
+      if (!getDashboardWsServer()) {
+        ioInstance = createDashboardWsServer(app.server, {
+          jwtSecret: opts.jwtSecret ?? env.JWT_SECRET,
+          corsOrigin: corsOrigins.length > 0 ? corsOrigins : true,
+        })
+      }
+    })
+
+    app.addHook('onClose', async () => {
+      const io = ioInstance ?? getDashboardWsServer()
+      if (io) {
+        await new Promise<void>((resolve) => {
+          io.close(() => resolve())
+        })
+        if (getDashboardWsServer() === io) {
+          setDashboardWsServer(null)
+        }
+      }
+    })
+  }
 
   return app
 }
