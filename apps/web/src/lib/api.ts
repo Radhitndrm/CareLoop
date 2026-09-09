@@ -74,6 +74,7 @@ export interface ActiveAlerts {
     id: string
     patientId: string
     patientName: string
+    livingSituation?: string | null
     triggerType: string
     hrBpm: number | null
     status: string

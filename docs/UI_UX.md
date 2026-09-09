@@ -271,25 +271,41 @@ Balas INFO untuk edukasi, cek menu.
   - *Empty State*: Informasi ramah saat data nihil.
 
 
-### 5.5 (C) Dashboard Nakes — Detail Alert Darurat
+### 5.5 (C) Dashboard Nakes — Panel Alert Darurat Real-Time (CL-212)
 
 ```
-┌───────────────────────────────────────┐
-│ Alerts > #e1  (EMERGENCY)              │
-│                                        │
-│ Pasien: Bu Ratna (72 th, ALONE)        │
-│ Anomali HR 145 bpm · 02:01 WIB         │
-│ [ 📍 Lihat Peta ] (lat, lng)           │
-│                                        │
-│ Timeline:                              │
-│  02:01 anomali terdeteksi              │
-│  02:01 konfirmasi pasien (30dtk)       │
-│  02:02 timeout → alert Tier2 + Nakes   │
-│  02:02 lokasi dikirim ke Ari           │
-│                                        │
-│ [ Saya Tangani ] [ Hubungi Pasien ]    │
-└───────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│ 🚨 Panel Peringatan Darurat Medis  [● Real-Time Aktif] │
+│ Notifikasi real-time anomali detak jantung & eskalasi  │
+├────────────────────────────────────────────────────────┤
+│ [2 Aktif]                                              │
+│ • Bu Ratna  [Tinggal Sendiri (Alone)]  02:01:00 WIB    │
+│   ● Anomali Detak Jantung Tinggi (145 bpm)             │
+│   📍 Buka di Google Maps (-7.7900, 110.3700)           │
+│   [ 🩺 Saya Tangani ]                                  │
+├────────────────────────────────────────────────────────┤
+│ • Pak Slamet  08:15:30 WIB                             │
+│   ● Anomali Detak Jantung Tinggi (128 bpm)             │
+│   📍 Lokasi tidak tersedia                             │
+│   [ ✓ Sudah Ditangani (HANDLED) ]                      │
+└────────────────────────────────────────────────────────┘
 ```
+
+- **Koneksi Real-Time (CL-208 / CL-212)**:
+  - Berlangganan event WebSocket Socket.IO `emergency.priority` (ter-scope per puskesmas/distrik).
+  - Indikator status koneksi: badge hijau pulse `Real-Time Aktif (WebSocket)` atau badge amber `Menghubungkan WS...`.
+  - Fallback resilient: inisialisasi awal lewat REST `GET /v1/dashboard/alerts`, polling berkala 30 detik jika WS terputus, dan tombol manual penyegaran data.
+- **Kartu Informasi Pasien (AC-4.3)**:
+  - Nama pasien dan badge khusus `Tinggal Sendiri (Alone)` jika `livingSituation = 'ALONE'`.
+  - Timestamp terformat waktu lokal Indonesia (`WIB`).
+  - Nilai BPM anomali detak jantung pasien.
+  - Tautan langsung Google Maps berdasarkan koordinat GPS (`lat`, `lng`) atau label `Lokasi tidak tersedia` jika belum ada fix sinyal.
+- **Aksi "Saya Tangani" (AC-4.5 & CL-207)**:
+  - Tombol aksi satu-klik yang memicu `POST /v1/escalations/:id/respond` dengan respons `HANDLE`.
+  - Mengirim konfirmasi `emergency.ack` via WebSocket untuk sinkronisasi antar-nakes.
+  - Mengubah tampilan alert menjadi `Sudah Ditangani (HANDLED)` dengan badge hijau dan menghentikan status eskalasi aktif.
+- **Calming Empty State**:
+  - Tampilan tenang dengan ikon checklist hijau jika tidak ada darurat aktif: *"Tidak Ada Peringatan Darurat Aktif. Seluruh pasien binaan dalam kondisi stabil."*
 
 ### 5.6 (D) App Keluarga — Notifikasi List
 

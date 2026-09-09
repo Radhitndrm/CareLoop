@@ -17,6 +17,7 @@ import { KpiCards } from '../../components/dashboard/kpi-cards'
 import { AdherenceChart } from '../../components/dashboard/adherence-chart'
 import { RiskTable } from '../../components/dashboard/risk-table'
 import { FilterBar } from '../../components/dashboard/filter-bar'
+import { EmergencyPanel } from '../../components/dashboard/emergency-panel'
 
 function DashboardContent() {
   const searchParams = useSearchParams()
@@ -100,24 +101,8 @@ function DashboardContent() {
         </div>
       )}
 
-      {/* Banner Emergency Aktif (jika ada) */}
-      {summary && summary.activeEmergencies > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border-2 border-rose-500 bg-rose-50 p-4 text-rose-950 shadow-sm dark:bg-rose-950/50 dark:border-rose-600 dark:text-rose-100">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-600 text-white font-bold animate-pulse">
-              🚨
-            </span>
-            <div>
-              <p className="font-bold text-base">
-                Terdeteksi {summary.activeEmergencies} Peringatan Darurat Medis Aktif!
-              </p>
-              <p className="text-xs text-rose-800 dark:text-rose-300">
-                Pasien dalam wilayah binaan membutuhkan konfirmasi keselamatan atau intervensi segera.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Panel Peringatan Darurat Medis Real-Time (CL-212, AC-4.3, AC-4.5) */}
+      <EmergencyPanel />
 
       {/* Filter Bar (FR-5.2, AC-5.2 bookmarkable) */}
       <FilterBar
