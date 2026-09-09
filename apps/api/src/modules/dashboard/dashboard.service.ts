@@ -93,6 +93,7 @@ export interface ActiveAlertsData {
     id: string
     patientId: string
     patientName: string
+    livingSituation?: string | null
     triggerType: string
     hrBpm: number | null
     status: string
@@ -617,6 +618,7 @@ export async function getDashboardAlerts(
         select: {
           id: true,
           districtCode: true,
+          livingSituation: true,
           user: { select: { fullName: true } },
           nakesContacts: {
             where: { isActive: true },
@@ -660,6 +662,7 @@ export async function getDashboardAlerts(
       id: e.id,
       patientId: e.patientId,
       patientName: patient?.user?.fullName ?? 'Pasien',
+      livingSituation: patient?.livingSituation ?? null,
       triggerType: e.triggerType,
       hrBpm: e.hrBpm,
       status: e.status,
