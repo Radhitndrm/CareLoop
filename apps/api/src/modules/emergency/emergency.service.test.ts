@@ -948,10 +948,15 @@ describe('emergency.service (CL-204 & CL-206)', () => {
         }),
       }
 
+      const mockWsServer = {
+        to: vi.fn().mockReturnThis(),
+        emit: vi.fn(),
+      }
+
       const result = await handleEmergencyTimeout(
         mockPrisma,
         { emergencyId: dummyEmergencyId },
-        { whatsAppService: mockWaService as any },
+        { whatsAppService: mockWaService as any, wsServer: mockWsServer as any },
       )
 
       // 1. Verifikasi eskalasi langsung ke NAKES (tanpa menunggu tier keluarga)
@@ -981,6 +986,22 @@ describe('emergency.service (CL-204 & CL-206)', () => {
               priority: 'HIGH',
               livingSituation: 'ALONE',
               tel112: 'tel:112',
+            }),
+          }),
+        }),
+      )
+
+      // 5. Verifikasi siaran alert darurat prioritas via WebSocket (CL-208 / ADR-004)
+      expect(mockWsServer.emit).toHaveBeenCalledWith(
+        'emergency.priority',
+        expect.objectContaining({
+          event: 'emergency.priority',
+          data: expect.objectContaining({
+            emergencyId: dummyEmergencyId,
+            tier: 'NAKES',
+            patient: expect.objectContaining({
+              fullName: 'Kakek Joyo',
+              livingSituation: 'ALONE',
             }),
           }),
         }),
