@@ -1,6 +1,6 @@
-// CL-209: Endpoint agregasi dashboard nakes (docs/API.md §3.8, AC-5.1, AC-5.3).
+// CL-209 & CL-210: Endpoint agregasi dan filter dashboard nakes (docs/API.md §3.8, AC-5.1, AC-5.3, FR-5.2).
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { z } from 'zod'
+import { dashboardFilterSchema } from '@careloop/shared'
 import { requireRole, getAuthUser } from '../../lib/auth'
 import { prisma } from '../../lib/prisma'
 import {
@@ -14,14 +14,6 @@ import {
 export * from './ws'
 export * from './dashboard.service'
 
-const dashboardQuerySchema = z.object({
-  district: z.string().optional(),
-  disease: z.string().optional(),
-  from: z.string().optional(),
-  to: z.string().optional(),
-  escalationStatus: z.string().optional(),
-})
-
 export function registerDashboardRoutes(app: FastifyInstance): void {
   // GET /v1/dashboard/summary (docs/API.md §3.8)
   app.get(
@@ -29,7 +21,7 @@ export function registerDashboardRoutes(app: FastifyInstance): void {
     { preHandler: [requireRole('NAKES', 'ADMIN')] },
     async (req: FastifyRequest) => {
       const claims = getAuthUser(req)
-      const query = dashboardQuerySchema.parse(req.query ?? {})
+      const query = dashboardFilterSchema.parse(req.query ?? {})
       const summary = await getDashboardSummary(prisma, claims, query)
       return { data: summary }
     },
@@ -41,7 +33,7 @@ export function registerDashboardRoutes(app: FastifyInstance): void {
     { preHandler: [requireRole('NAKES', 'ADMIN')] },
     async (req: FastifyRequest) => {
       const claims = getAuthUser(req)
-      const query = dashboardQuerySchema.parse(req.query ?? {})
+      const query = dashboardFilterSchema.parse(req.query ?? {})
       const adherence = await getDashboardAdherence(prisma, claims, query)
       return { data: adherence }
     },
@@ -53,7 +45,7 @@ export function registerDashboardRoutes(app: FastifyInstance): void {
     { preHandler: [requireRole('NAKES', 'ADMIN')] },
     async (req: FastifyRequest) => {
       const claims = getAuthUser(req)
-      const query = dashboardQuerySchema.parse(req.query ?? {})
+      const query = dashboardFilterSchema.parse(req.query ?? {})
       const patients = await getDashboardRiskPatients(prisma, claims, query)
       return { data: patients }
     },
@@ -65,7 +57,7 @@ export function registerDashboardRoutes(app: FastifyInstance): void {
     { preHandler: [requireRole('NAKES', 'ADMIN')] },
     async (req: FastifyRequest) => {
       const claims = getAuthUser(req)
-      const query = dashboardQuerySchema.parse(req.query ?? {})
+      const query = dashboardFilterSchema.parse(req.query ?? {})
       const alerts = await getDashboardAlerts(prisma, claims, query)
       return { data: alerts }
     },

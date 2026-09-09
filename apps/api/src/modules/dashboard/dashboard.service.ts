@@ -213,11 +213,32 @@ export function buildScopedPatientWhere(
   }
 
   if (filter?.district) {
-    andClauses.push({ districtCode: filter.district })
+    andClauses.push({ districtCode: filter.district.trim() })
   }
 
   if (filter?.disease) {
-    andClauses.push({ healthConditions: { has: filter.disease } })
+    const diseaseInput = filter.disease.trim()
+    const diseaseUpper = diseaseInput.toUpperCase()
+    if (diseaseInput === diseaseUpper) {
+      andClauses.push({ healthConditions: { has: diseaseUpper } })
+    } else {
+      andClauses.push({
+        OR: [
+          { healthConditions: { has: diseaseUpper } },
+          { healthConditions: { has: diseaseInput } },
+        ],
+      })
+    }
+  }
+
+  if (filter?.escalationStatus) {
+    andClauses.push({
+      escalationRuns: {
+        some: {
+          status: filter.escalationStatus.trim(),
+        },
+      },
+    })
   }
 
   if (andClauses.length === 0) return {}
@@ -307,12 +328,19 @@ export async function getDashboardSummary(
   const adherenceRate = calculateAdherenceRate(confirmedCount, totalEvaluated)
 
   // 3. Hitung alert darurat aktif (PENDING_PATIENT_CONFIRM atau ESCALATING)
+  const emergencyWhere: any = {
+    patientId: { in: patientIds },
+    status: { in: [EmergencyStatus.PENDING_PATIENT_CONFIRM, EmergencyStatus.ESCALATING] },
+  }
+  if (filter?.from || filter?.to) {
+    emergencyWhere.triggeredAt = {}
+    if (filter.from) emergencyWhere.triggeredAt.gte = new Date(filter.from)
+    if (filter.to) emergencyWhere.triggeredAt.lte = new Date(filter.to)
+  }
+
   const activeEmergencies = client.emergencyAlert?.count
     ? await client.emergencyAlert.count({
-        where: {
-          patientId: { in: patientIds },
-          status: { in: [EmergencyStatus.PENDING_PATIENT_CONFIRM, EmergencyStatus.ESCALATING] },
-        },
+        where: emergencyWhere,
       })
     : 0
 
@@ -324,12 +352,21 @@ export async function getDashboardSummary(
     EscalationRunStatus.NAKES,
   ]
 
+  const escalationWhere: any = {
+    patientId: { in: patientIds },
+    status: filter?.escalationStatus
+      ? filter.escalationStatus.trim()
+      : { in: activeEscalationStatuses },
+  }
+  if (filter?.from || filter?.to) {
+    escalationWhere.startedAt = {}
+    if (filter.from) escalationWhere.startedAt.gte = new Date(filter.from)
+    if (filter.to) escalationWhere.startedAt.lte = new Date(filter.to)
+  }
+
   const activeEscalations = client.escalationRun?.count
     ? await client.escalationRun.count({
-        where: {
-          patientId: { in: patientIds },
-          status: { in: activeEscalationStatuses },
-        },
+        where: escalationWhere,
       })
     : 0
 
@@ -505,23 +542,35 @@ export async function getDashboardRiskPatients(
   const scope = await resolveNakesScope(client, claims)
   const patientWhere = buildScopedPatientWhere(scope, filter)
 
+  const riskCondition = {
+    OR: [
+      { riskLevel: RiskLevel.HIGH },
+      { riskScore: { gte: 70 } },
+    ],
+  }
+
+  const finalWhere = Object.keys(patientWhere).length > 0
+    ? { AND: [patientWhere, riskCondition] }
+    : riskCondition
+
+  const complianceWhere: any = {}
+  if (filter?.from || filter?.to) {
+    complianceWhere.scheduledAt = {}
+    if (filter.from) complianceWhere.scheduledAt.gte = new Date(filter.from)
+    if (filter.to) complianceWhere.scheduledAt.lte = new Date(filter.to)
+  } else {
+    complianceWhere.scheduledAt = {
+      gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    }
+  }
+
   const patients = client.patient?.findMany
     ? await client.patient.findMany({
-        where: {
-          ...patientWhere,
-          OR: [
-            { riskLevel: RiskLevel.HIGH },
-            { riskScore: { gte: 70 } },
-          ],
-        },
+        where: finalWhere,
         include: {
           user: { select: { fullName: true, phone: true } },
           complianceLogs: {
-            where: {
-              scheduledAt: {
-                gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-              },
-            },
+            where: complianceWhere,
             select: { status: true },
           },
         },
@@ -592,6 +641,11 @@ export async function getDashboardAlerts(
     patientId: { in: patientIds },
     status: { in: [EmergencyStatus.PENDING_PATIENT_CONFIRM, EmergencyStatus.ESCALATING] },
   }
+  if (filter?.from || filter?.to) {
+    emergencyWhere.triggeredAt = {}
+    if (filter.from) emergencyWhere.triggeredAt.gte = new Date(filter.from)
+    if (filter.to) emergencyWhere.triggeredAt.lte = new Date(filter.to)
+  }
 
   const rawEmergencies = client.emergencyAlert?.findMany
     ? await client.emergencyAlert.findMany({
@@ -627,12 +681,21 @@ export async function getDashboardAlerts(
     EscalationRunStatus.NAKES,
   ]
 
+  const escalationWhere: any = {
+    patientId: { in: patientIds },
+    status: filter?.escalationStatus
+      ? filter.escalationStatus.trim()
+      : { in: activeEscalationStatuses },
+  }
+  if (filter?.from || filter?.to) {
+    escalationWhere.startedAt = {}
+    if (filter.from) escalationWhere.startedAt.gte = new Date(filter.from)
+    if (filter.to) escalationWhere.startedAt.lte = new Date(filter.to)
+  }
+
   const rawEscalations = client.escalationRun?.findMany
     ? await client.escalationRun.findMany({
-        where: {
-          patientId: { in: patientIds },
-          status: { in: activeEscalationStatuses },
-        },
+        where: escalationWhere,
         orderBy: { startedAt: 'desc' },
       })
     : []
