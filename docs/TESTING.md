@@ -153,15 +153,23 @@ Gunakan fake timers.
 | ES-11 | Konfirmasi pasien saat run di T1 | `onPatientConfirmed` | → RESOLVED (bahkan saat eskalasi berjalan) |
 | ES-12 | Double active run dicegah | start 2 run context sama | partial unique index → 409 |
 
-### 6.2 Integration — full journey
-**Test E2E (integration): Anomali → Timeout → Alert berjenjang.**
-1. Setup: pasien ALONE, family T2 (Ari), nakes primary (kader Nuning).
-2. `POST /v1/dev/mock-anomaly` (HR 145).
-3. Assert: emergency status `PENDING_PATIENT_CONFIRM`, konfirmasi WA terkirim ke pasien.
-4. Advance time 45 dtk (fake timers) tanpa respons.
-5. Assert: alert ke Ari (T2) **dan** alert prioritas nakes terkirim paralel; lokasi terpasang; `tel:112` hadir di payload.
-6. Nakes respond `HANDLE` → run `HANDLED`, timeline tercatat.
-7. Ulangi dengan family T1 tersedia → verifikasi **urutan** T1 → T2 → NAKES (bukan paralel), dan T1 handle menghentikan semuanya.
+### 6.2 Integration — full journey (Fase 2: `tests/fase2-journey.integration.test.ts`)
+Telah diimplementasikan pada suite integrasi Fase 2 (CL-214):
+1. **Journey Anomali-SAFE -> RESOLVED (AC-4.2)**:
+   - Pasien mengonfirmasi `SAFE` melalui `POST /v1/emergencies/:id/respond`.
+   - Status darurat diselesaikan (`RESOLVED_SAFE`), eskalasi run diselesaikan (`RESOLVED`).
+   - Verifikasi ketat: keluarga **TIDAK** dialert (tidak ada pesan darurat terkirim ke keluarga).
+2. **Journey Anomali-Timeout -> Alert Keluarga & Nakes + tel:112 (AC-4.3 s.d. AC-4.6)**:
+   - Timeout darurat dipicu melalui `POST /v1/emergencies/:id/timeout`.
+   - Untuk pasien bersama keluarga: alert terkirim ke kontak keluarga terurut tier (TIER_1), menyertakan koordinat GPS Google Maps (`AC-4.3`) dan tautan panggilan manual `tel:112` tanpa auto-dial (`AC-4.6`).
+   - Untuk pasien tinggal sendiri (ALONE tanpa Tier-1): alert darurat prioritas dikirim langsung ke nakes pembina (`AC-4.5`) beserta tautan `tel:112`.
+3. **Urutan Tier Bertingkat & Respons HANDLED Berhenti (AC-7.1 s.d. AC-7.5)**:
+   - Pengujian alur berjenjang: respons `LOOKING` mencatat acknowledging tanpa menyelesaikan run.
+   - Respons `HANDLE` melalui `POST /v1/escalations/:id/respond` menghentikan eskalasi seketika (`HANDLED`), membatalkan seluruh tier tersisa (`remainingTiersCancelled: true`).
+   - Guard transisi ilegal (`AC-7.4`): aksi lanjutan setelah terminal status ditolak dengan kode `422 (INVALID_TRANSITION)`.
+4. **Kalkulasi Adherence Dashboard API (AC-5.1, AC-5.3)**:
+   - Agregasi `GET /v1/dashboard/summary` memverifikasi rumus `adherenceRate = confirmed / (confirmed + confirmedLate + missed)`.
+   - Pengujian keamanan guard pembagian dengan nol (`totalEvaluated = 0 -> adherenceRate = 0`).
 
 **Test timeout restart-safe:**
 - Mulai run, simulasikan restart worker (bullmq job dipulihkan dari Redis) → timeout tetap men-trigger transisi. (Skippable bila Redis tak tersedia di test; ganti dengan manual note.)
