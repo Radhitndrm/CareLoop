@@ -410,32 +410,136 @@ Refresh JWT dengan `refreshToken` di body.
 - Mengirim pesan WhatsApp ke seluruh kontak keluarga aktif terurut tier dengan link Google Maps dan nomor darurat `tel:112` (one-tap call manual, tanpa auto-dial).
 - Jika pasien tinggal sendiri (`livingSituation = ALONE`) tanpa kontak keluarga tier-1, alert darurat langsung dieskalasi ke kontak nakes pembina (`alertSentToNakesAt`) dan notifikasi dashboard prioritas tinggi.
 
-### 3.6 Eskalasi (Fitur 3, 7)
+### 3.6 Eskalasi (Fitur 3, 7 — CL-207)
+
+- **Alur Eskalasi Bertingkat (AC-7.1..7.5)**:
+  - Urutan eskalasi: `WAITING_PATIENT` (default 30m / emergency 45s) → `FAMILY_TIER_1` (default 15m) → `FAMILY_TIER_2` (default 15m) → `NAKES` (default 30m) → `TIMED_OUT`.
+  - **Timeout Configurable (AC-7.5)**: Nilai default dapat diubah per pasien melalui `configSnapshot` (`patientWaitSec`, `tier1WaitSec`, `tier2WaitSec`, `nakesWaitSec`).
+  - **Skip Tier Kosong (AC-7.3 / ES-7 / ES-8)**: Pasien tanpa kontak Tier 1 otomatis langsung masuk ke Tier 2; pasien tanpa kontak keluarga (T1 & T2) langsung dialihkan ke NAKES.
+  - **Penghentian Eskalasi (AC-7.2)**: Respons `HANDLE` oleh keluarga atau nakes pada tier mana pun langsung mengubah status run menjadi `HANDLED` dan membatalkan eskalasi ke tier berikutnya.
+  - **Pencatatan Transisi (AC-7.4)**: Setiap transisi status, pengiriman alert WhatsApp, dan respons tercatat di tabel `escalation_steps` serta `audit_logs`.
 
 | Method | Path | Role | Deskripsi |
 |---|---|---|---|
 | GET | `/v1/escalations/active` | PATIENT, FAMILY | Run eskalasi aktif milik saya |
 | GET | `/v1/escalations/:id` | PATIENT, FAMILY(scope), NAKES(scope) | Detail run + steps |
-| POST | `/v1/escalations/:id/respond` | FAMILY, NAKES | Keluarga/nakes merespons (handle) |
-| GET | `/v1/escalations/:runId/steps` | NAKES (scope) | Log steps |
+| POST | `/v1/escalations/:id/respond` | FAMILY, NAKES | Keluarga/nakes merespons (handle/looking) |
+| GET | `/v1/escalations/:runId/steps` | NAKES (scope) | Log steps lengkap |
+
+**GET /v1/escalations/active — Response 200:**
+```json
+{
+  "data": [
+    {
+      "id": "44444444-4444-4444-8444-444444444444",
+      "patientId": "11111111-1111-4111-8111-111111111111",
+      "context": "SCHEDULE",
+      "status": "FAMILY_TIER_1",
+      "currentTier": "TIER_1",
+      "startedAt": "2026-08-16T08:00:00.000Z",
+      "steps": [
+        {
+          "id": "step-1",
+          "tier": "TIER_1",
+          "messageKey": "alert.family.tier_1",
+          "contactPhone": "081299990001",
+          "sentAt": "2026-08-16T08:30:00.000Z"
+        }
+      ],
+      "patient": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "nik": "3471010000000001",
+        "livingSituation": "WITH_FAMILY",
+        "emergencyPreference": "FAMILY_FIRST",
+        "user": {
+          "fullName": "Bu Siti Test",
+          "phone": "081234567890"
+        }
+      }
+    }
+  ]
+}
+```
+
+**GET /v1/escalations/:id — Response 200:**
+```json
+{
+  "data": {
+    "id": "44444444-4444-4444-8444-444444444444",
+    "patientId": "11111111-1111-4111-8111-111111111111",
+    "context": "SCHEDULE",
+    "status": "FAMILY_TIER_1",
+    "currentTier": "TIER_1",
+    "startedAt": "2026-08-16T08:00:00.000Z",
+    "resolvedAt": null,
+    "resolutionType": null,
+    "steps": [
+      {
+        "id": "step-1",
+        "tier": "TIER_1",
+        "channel": "WHATSAPP",
+        "messageKey": "alert.family.tier_1",
+        "contactPhone": "081299990001",
+        "sentAt": "2026-08-16T08:30:00.000Z"
+      }
+    ],
+    "patient": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "nik": "3471010000000001",
+      "livingSituation": "WITH_FAMILY",
+      "emergencyPreference": "FAMILY_FIRST"
+    },
+    "resolvedByUser": null
+  }
+}
+```
 
 **POST /v1/escalations/:id/respond — Request:**
 ```json
-{ "response": "HANDLE", "note": "Saya akan ke rumah Bu Ratna" }
+{ "response": "HANDLE", "note": "Saya akan ke rumah Bu Ratna sekarang" }
 ```
 **Response 200:**
 ```json
 {
   "data": {
-    "runId": "r1",
+    "runId": "44444444-4444-4444-8444-444444444444",
     "status": "HANDLED",
-    "resolvedBy": "u2",
+    "resolvedBy": "22222222-2222-4222-8222-222222222222",
     "resolutionType": "FAMILY_HANDLED",
     "remainingTiersCancelled": true
   }
 }
 ```
-- Transisi invalid (run sudah HANDLED) → `422 INVALID_TRANSITION`.
+- Opsi `response: "LOOKING"` mencatat pengakuan tanpa menghentikan timeout.
+- Transisi invalid (run sudah berstatus final `HANDLED`, `RESOLVED`, `TIMED_OUT`) → `422 INVALID_TRANSITION`.
+
+**GET /v1/escalations/:runId/steps — Response 200:**
+```json
+{
+  "data": [
+    {
+      "id": "step-1",
+      "runId": "44444444-4444-4444-8444-444444444444",
+      "tier": null,
+      "channel": "WHATSAPP",
+      "messageKey": "reminder.metformin",
+      "contactPhone": "081234567890",
+      "sentAt": "2026-08-16T08:00:00.000Z",
+      "response": "NONE"
+    },
+    {
+      "id": "step-2",
+      "runId": "44444444-4444-4444-8444-444444444444",
+      "tier": "TIER_1",
+      "channel": "WHATSAPP",
+      "messageKey": "alert.family.tier_1",
+      "contactPhone": "081299990001",
+      "sentAt": "2026-08-16T08:30:00.000Z",
+      "response": "NONE"
+    }
+  ]
+}
+```
 
 ### 3.7 Kontak Keluarga & Nakes
 
