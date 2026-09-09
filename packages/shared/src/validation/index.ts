@@ -153,3 +153,42 @@ export const riskPatientFilterSchema = z.object({
   to: z.string().date().optional(),
 })
 export type RiskPatientFilter = z.infer<typeof riskPatientFilterSchema>
+
+const optionalTrimmedString = z
+  .string()
+  .trim()
+  .transform((val) => (val === '' ? undefined : val))
+  .optional()
+
+const optionalDateString = z
+  .string()
+  .trim()
+  .transform((val) => (val === '' ? undefined : val))
+  .refine((val) => val === undefined || !Number.isNaN(Date.parse(val)), {
+    message: 'Format tanggal tidak valid (YYYY-MM-DD atau ISO string)',
+  })
+  .optional()
+
+export const dashboardFilterSchema = z
+  .object({
+    district: optionalTrimmedString,
+    disease: optionalTrimmedString,
+    from: optionalDateString,
+    to: optionalDateString,
+    escalationStatus: optionalTrimmedString,
+  })
+  .refine(
+    (data) => {
+      if (data.from && data.to) {
+        return new Date(data.from) <= new Date(data.to)
+      }
+      return true
+    },
+    {
+      message: 'Rentang tanggal tidak valid (from harus <= to)',
+      path: ['to'],
+    },
+  )
+export type DashboardFilterInput = z.infer<typeof dashboardFilterSchema>
+
+

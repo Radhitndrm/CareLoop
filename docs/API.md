@@ -572,10 +572,17 @@ Refresh JWT dengan `refreshToken` di body.
 | Method | Path | Role | Deskripsi |
 |---|---|---|---|
 | GET | `/v1/dashboard/summary` | NAKES (scope) | Ringkasan: total pasien, adherence, eskalasi aktif, darurat |
-| GET | `/v1/dashboard/adherence` | NAKES (scope) | Seri data kepatuhan (grafik) |
-| GET | `/v1/dashboard/adherence?district=3471&disease=DIABETES&from=2026-08-01&to=2026-08-16` | NAKES | Dengan filter |
-| GET | `/v1/dashboard/risk-patients` | NAKES (scope) | Pasien berisiko tinggi |
-| GET | `/v1/dashboard/alerts` | NAKES (scope) | Stream alert (juga via WS) |
+| GET | `/v1/dashboard/adherence` | NAKES (scope) | Seri data kepatuhan (grafik) harian & per jenis penyakit |
+| GET | `/v1/dashboard/risk-patients` | NAKES (scope) | Pasien berisiko tinggi (skor >= 70 / HIGH) |
+| GET | `/v1/dashboard/alerts` | NAKES (scope) | Stream alert darurat & eskalasi aktif |
+
+**Query Parameters Filter (CL-210 / FR-5.2 / AC-5.2 / AC-5.3):**
+Didukung di seluruh endpoint dashboard (`/summary`, `/adherence`, `/risk-patients`, `/alerts`):
+- `district` (string, opsional): Kode distrik / kelurahan pasien (misal `3471`). Nakes dibatasi hanya pada wilayah binaannya (AC-5.3; jika mengakses distrik di luar binaan mengembalikan hasil kosong, bukan membocorkan data).
+- `disease` (string, opsional): Jenis penyakit (misal `DIABETES`, `HYPERTENSION`), case-insensitive.
+- `from` (string tanggal `YYYY-MM-DD` atau ISO datetime, opsional): Batas awal rentang tanggal.
+- `to` (string tanggal `YYYY-MM-DD` atau ISO datetime, opsional): Batas akhir rentang tanggal (`from <= to`).
+- `escalationStatus` (string, opsional): Filter status eskalasi aktif (misal `FAMILY_TIER_1`, `FAMILY_TIER_2`, `NAKES`).
 
 **GET /v1/dashboard/summary — 200:**
 ```json

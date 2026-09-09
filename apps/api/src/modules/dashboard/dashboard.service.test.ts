@@ -238,4 +238,177 @@ describe('CL-209: Dashboard Aggregation Service', () => {
       expect(alerts.totalActive).toBe(2)
     })
   })
+
+  describe('CL-210: Filter Dashboard Query & Scoping (FR-5.2, AC-5.2, AC-5.3)', () => {
+    it('buildScopedPatientWhere menerapkan filter district, disease, dan escalationStatus', () => {
+      const scope = {
+        isAdmin: true,
+        nakesUserId: 'admin-1',
+        puskesmasIds: [],
+        districtCodes: [],
+        patientFilter: {},
+      }
+
+      const where = buildScopedPatientWhere(scope, {
+        district: '347101',
+        disease: 'diabetes',
+        escalationStatus: 'FAMILY_TIER_1',
+      })
+
+      expect(where).toHaveProperty('AND')
+      const andClauses = (where as any).AND
+      expect(andClauses).toContainEqual({ districtCode: '347101' })
+      expect(andClauses).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            OR: [
+              { healthConditions: { has: 'DIABETES' } },
+              { healthConditions: { has: 'diabetes' } },
+            ],
+          }),
+          expect.objectContaining({
+            escalationRuns: {
+              some: {
+                status: 'FAMILY_TIER_1',
+              },
+            },
+          }),
+        ]),
+      )
+    })
+
+    it('buildScopedPatientWhere mengunci nakes dalam scope binaan meski ada filter distrik luar (AC-5.3)', () => {
+      const scope = {
+        isAdmin: false,
+        nakesUserId: 'nakes-1',
+        puskesmasIds: ['psk-1'],
+        districtCodes: ['347101'],
+        patientFilter: {
+          OR: [
+            { districtCode: { in: ['347101'] } },
+            { nakesContacts: { some: { puskesmasId: { in: ['psk-1'] }, isActive: true } } },
+          ],
+        },
+      }
+
+      const where = buildScopedPatientWhere(scope, { district: '317101' })
+
+      expect(where).toHaveProperty('AND')
+      const andClauses = (where as any).AND
+      // Scope pasien nakes tetap menjadi klausul pembatas wajib
+      expect(andClauses).toContainEqual(scope.patientFilter)
+      expect(andClauses).toContainEqual({ districtCode: '317101' })
+    })
+
+    it('getDashboardSummary meneruskan filter rentang tanggal dan status eskalasi', async () => {
+      const mockPrisma = {
+        patient: {
+          findMany: vi.fn().mockResolvedValue([{ id: 'p1', riskLevel: RiskLevel.LOW }]),
+        },
+        complianceLog: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        emergencyAlert: {
+          count: vi.fn().mockResolvedValue(0),
+        },
+        escalationRun: {
+          count: vi.fn().mockResolvedValue(1),
+        },
+      }
+
+      await getDashboardSummary(
+        mockPrisma,
+        { sub: 'admin-1', role: 'ADMIN' },
+        {
+          from: '2026-08-01',
+          to: '2026-08-16',
+          escalationStatus: EscalationRunStatus.FAMILY_TIER_2,
+        },
+      )
+
+      expect(mockPrisma.complianceLog.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            scheduledAt: {
+              gte: new Date('2026-08-01'),
+              lte: new Date('2026-08-16'),
+            },
+          }),
+        }),
+      )
+
+      expect(mockPrisma.emergencyAlert.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            triggeredAt: {
+              gte: new Date('2026-08-01'),
+              lte: new Date('2026-08-16'),
+            },
+          }),
+        }),
+      )
+
+      expect(mockPrisma.escalationRun.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: EscalationRunStatus.FAMILY_TIER_2,
+            startedAt: {
+              gte: new Date('2026-08-01'),
+              lte: new Date('2026-08-16'),
+            },
+          }),
+        }),
+      )
+    })
+
+    it('getDashboardAlerts menerapkan filter rentang tanggal dan status eskalasi pada stream alert', async () => {
+      const mockPrisma = {
+        patient: {
+          findMany: vi.fn().mockResolvedValue([
+            { id: 'p1', districtCode: '3471', user: { fullName: 'Pasien 1' }, nakesContacts: [] },
+          ]),
+        },
+        emergencyAlert: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        escalationRun: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+      }
+
+      await getDashboardAlerts(
+        mockPrisma,
+        { sub: 'admin-1', role: 'ADMIN' },
+        {
+          from: '2026-08-01',
+          to: '2026-08-16',
+          escalationStatus: EscalationRunStatus.NAKES,
+        },
+      )
+
+      expect(mockPrisma.emergencyAlert.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            triggeredAt: {
+              gte: new Date('2026-08-01'),
+              lte: new Date('2026-08-16'),
+            },
+          }),
+        }),
+      )
+
+      expect(mockPrisma.escalationRun.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: EscalationRunStatus.NAKES,
+            startedAt: {
+              gte: new Date('2026-08-01'),
+              lte: new Date('2026-08-16'),
+            },
+          }),
+        }),
+      )
+    })
+  })
 })
+

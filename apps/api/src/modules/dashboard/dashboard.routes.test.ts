@@ -227,4 +227,93 @@ describe('CL-209: Dashboard Routes Integration (docs/API.md §3.8)', () => {
       expect(body.data.totalActive).toBe(2)
     })
   })
+
+  describe('CL-210: Filter Endpoint Dashboard (FR-5.2, AC-5.2, AC-5.3)', () => {
+    it('200 — GET /v1/dashboard/summary menerima filter district, disease, from, to, escalationStatus', async () => {
+      vi.spyOn(prisma.patient, 'findMany').mockResolvedValue([
+        { id: dummyPatientId, riskLevel: RiskLevel.LOW, riskScore: 20 },
+      ] as any)
+
+      vi.spyOn(prisma.complianceLog, 'findMany').mockResolvedValue([])
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/dashboard/summary?district=3471&disease=DIABETES&from=2026-08-01&to=2026-08-16&escalationStatus=FAMILY_TIER_1',
+        headers: { Authorization: `Bearer ${tokenNakes}` },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data).toBeDefined()
+    })
+
+    it('200 — GET /v1/dashboard/adherence menerima filter tanggal dan wilayah', async () => {
+      vi.spyOn(prisma.patient, 'findMany').mockResolvedValue([
+        { id: dummyPatientId, healthConditions: ['DIABETES'] },
+      ] as any)
+
+      vi.spyOn(prisma.complianceLog, 'findMany').mockResolvedValue([])
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/dashboard/adherence?district=3471&from=2026-08-01&to=2026-08-16',
+        headers: { Authorization: `Bearer ${tokenNakes}` },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const body = res.json()
+      expect(body.data.period.from).toBe('2026-08-01')
+      expect(body.data.period.to).toBe('2026-08-16')
+    })
+
+    it('200 — GET /v1/dashboard/risk-patients menerima filter jenis penyakit dan wilayah', async () => {
+      vi.spyOn(prisma.patient, 'findMany').mockResolvedValue([])
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/dashboard/risk-patients?district=3471&disease=DIABETES',
+        headers: { Authorization: `Bearer ${tokenNakes}` },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data).toEqual([])
+    })
+
+    it('200 — GET /v1/dashboard/alerts menerima filter status eskalasi dan rentang tanggal', async () => {
+      vi.spyOn(prisma.patient, 'findMany').mockResolvedValue([])
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/dashboard/alerts?escalationStatus=FAMILY_TIER_1&from=2026-08-01&to=2026-08-16',
+        headers: { Authorization: `Bearer ${tokenNakes}` },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data.totalActive).toBe(0)
+    })
+
+    it('400 — VALIDATION_ERROR jika format tanggal from atau to tidak valid', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/dashboard/summary?from=tanggal-salah',
+        headers: { Authorization: `Bearer ${tokenNakes}` },
+      })
+
+      expect(res.statusCode).toBe(400)
+      const body = res.json()
+      expect(body.error).toBeDefined()
+    })
+
+    it('400 — VALIDATION_ERROR jika rentang tanggal terbalik (from > to)', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/dashboard/summary?from=2026-08-20&to=2026-08-10',
+        headers: { Authorization: `Bearer ${tokenNakes}` },
+      })
+
+      expect(res.statusCode).toBe(400)
+      const body = res.json()
+      expect(body.error).toBeDefined()
+    })
+  })
 })
+
