@@ -122,6 +122,8 @@ export function registerEmergencyRoutes(app: FastifyInstance): void {
       response: body.response,
       notes: body.notes,
       actorUserId: (req.user as any)?.sub ?? null,
+      locationLat: body.locationLat,
+      locationLng: body.locationLng,
     })
 
     return reply.code(200).send({ data: result })

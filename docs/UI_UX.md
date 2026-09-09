@@ -210,26 +210,53 @@ Balas INFO untuk edukasi, cek menu.
   - Fallback URL: `http://<host>/confirm?scheduleId=<uuid>`.
   - Ekstraksi otomatis `scheduleId` saat cold start (`Linking.getInitialURL`) maupun warm start (`Linking.addEventListener`).
 
-### 5.3 (B) App Pasien — Layar Darurat (Full Screen, bergetar)
+### 5.3 (B) App Pasien — Layar Darurat Medis & GPS (CL-213)
 
 ```
-┌──────────────────────────────┐
-│ 🔺 EMERGENCY                  │
-│                              │
-│ Deteksi detak jantung tinggi │
-│ (145 bpm).                   │
-│                              │
-│ Apakah Anda merasa aman?     │
-│                              │
-│  [ 🟢 Saya Aman ]            │
-│  [ 🆘 Saya Butuh Bantuan ]   │
-│                              │
-│ Menunggu respons: 45 detik   │
-│ (progress bar besar)         │
-└──────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│ 🚨 DARURAT MEDIS                             │
+│ CareLoop — Respon & Perlindungan Pasien      │
+├──────────────────────────────────────────────┤
+│ 💓 Anomali Detak Jantung Terdeteksi          │
+│    145 BPM (Tinggi)                          │
+│                                              │
+│ 📍 Lokasi GPS Pasien:                        │
+│    -6.2088, 106.8456 (±15m)                  │
+│    [ Buka di Google Maps ↗ ] [ 🔄 Segarkan ] │
+├──────────────────────────────────────────────┤
+│ Sisa Waktu Konfirmasi: 45 detik              │
+│ [████████████████████████████░░░░░░░░]       │
+│                                              │
+│ Apakah Anda merasa aman saat ini?            │
+│                                              │
+│  [ 🟢 Saya Aman ]                            │
+│  [ 🆘 Saya Butuh Bantuan ]                   │
+│                                              │
+│ Bila tidak merespons dalam 45s, eskalasi ke │
+│ keluarga & nakes akan dipicu otomatis.       │
+├──────────────────────────────────────────────┤
+│ State Timeout / Bantuan Diminta:             │
+│ ⚠️ Peringatan Darurat Terkirim ke Keluarga!  │
+│ [ 📞 Panggil 112 (Ambulans/Polisi) ]         │
+│ (One-tap manual, TIDAK ADA auto-dial)        │
+└──────────────────────────────────────────────┘
 ```
 
-- Setelah timeout: layar berubah → lokasi terkirim + tombol besar `[ 📞 Panggil 112 ]` (one-tap `tel:112`).
+- **Alur Konfirmasi Pasien (AC-4.2 / CL-205)**:
+  - Layar darurat aktif dapat dibuka melalui deep link `careloop://emergency?id=<uuid>` atau switcher tab navigasi atas.
+  - **Tombol "Saya Aman" (SAFE)**: Memanggil endpoint `POST /v1/emergencies/:id/respond` dengan `{ response: 'SAFE', locationLat, locationLng }`. Status darurat diselesaikan (`RESOLVED_SAFE`), eskalasi dibatalkan, dan keluarga tidak dialert.
+  - **Tombol "Saya Butuh Bantuan" (NEED_HELP)**: Memanggil endpoint `POST /v1/emergencies/:id/respond` dengan `{ response: 'NEED_HELP', locationLat, locationLng }`. Eskalasi darurat langsung dipercepat ke keluarga dan nakes tanpa menunggu sisa waktu timeout.
+- **Integrasi GPS & Izin Lokasi (AC-4.3)**:
+  - Menggunakan `expo-location` untuk meminta izin foreground lokasi (`ACCESS_FINE_LOCATION` / `NSLocationWhenInUseUsageDescription`).
+  - Mengambil koordinat GPS terkini (`lastKnownPosition` / `getCurrentPositionAsync`) dan mengirimkannya bersama respons darurat ke backend.
+  - Menampilkan tautan langsung Google Maps (`https://www.google.com/maps?q=lat,lng`) atau fallback informatif jika izin ditolak.
+- **Tombol Panggilan 112 Manual (AC-4.6 — Hard Constraint)**:
+  - Tombol darurat besar (`minHeight: 64dp`, label 22px warna merah kontras tinggi).
+  - Panggilan dipicu secara manual via `Linking.openURL('tel:112')`.
+  - **TIDAK ADA** kode yang memulai panggilan otomatis (anti auto-dial hard constraint terjamin).
+- **Manual Smoke Test di Expo Go**:
+  - Tersedia tab navigasi atas untuk berpindah antara `[ 💊 Jadwal Obat ]` dan `[ 🚨 Darurat (112) ]`.
+  - Tersedia tombol "Ulangi Simulasi Demo" untuk mereset countdown dan state simulasi darurat saat pengujian langsung.
 
 ### 5.4 (C) Dashboard Nakes — Overview
 

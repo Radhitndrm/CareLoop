@@ -273,6 +273,8 @@ export interface PatientEmergencyResponseInput {
   response: 'SAFE' | 'NEED_HELP'
   actorUserId?: string | null
   notes?: string | null
+  locationLat?: number | null
+  locationLng?: number | null
 }
 
 export interface PatientEmergencyResponseResult {
@@ -361,8 +363,20 @@ export async function handlePatientEmergencyResponse(
         patientConfirmedAt: currentTime,
         resolvedAt: currentTime,
         notes: updatedNotes,
+        ...(typeof input.locationLat === 'number' ? { locationLat: input.locationLat } : {}),
+        ...(typeof input.locationLng === 'number' ? { locationLng: input.locationLng } : {}),
       },
     })
+
+    if (typeof input.locationLat === 'number' && typeof input.locationLng === 'number' && (prisma as any).patient?.update) {
+      await (prisma as any).patient.update({
+        where: { id: emergency.patientId },
+        data: {
+          lastKnownLat: input.locationLat,
+          lastKnownLng: input.locationLng,
+        },
+      })
+    }
 
     // 2. Selesaikan EscalationRun aktif jika ada (AC-4.2: keluarga TIDAK dialert)
     if (emergency.escalationRun && isActiveStatus(emergency.escalationRun.status)) {
@@ -432,8 +446,20 @@ export async function handlePatientEmergencyResponse(
       patientConfirmedSafe: false,
       patientConfirmedAt: currentTime,
       notes: updatedNotes,
+      ...(typeof input.locationLat === 'number' ? { locationLat: input.locationLat } : {}),
+      ...(typeof input.locationLng === 'number' ? { locationLng: input.locationLng } : {}),
     },
   })
+
+  if (typeof input.locationLat === 'number' && typeof input.locationLng === 'number' && (prisma as any).patient?.update) {
+    await (prisma as any).patient.update({
+      where: { id: emergency.patientId },
+      data: {
+        lastKnownLat: input.locationLat,
+        lastKnownLng: input.locationLng,
+      },
+    })
+  }
 
   let newEscalationStatus = emergency.escalationRun?.status
 
