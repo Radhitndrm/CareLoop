@@ -231,29 +231,45 @@ Balas INFO untuk edukasi, cek menu.
 
 - Setelah timeout: layar berubah → lokasi terkirim + tombol besar `[ 📞 Panggil 112 ]` (one-tap `tel:112`).
 
-### 5.4 (C) Dashboard Nakes — Overview
+### 5.4 (C) Dashboard Nakes — Overview (CL-211)
 
 ```
-┌───────────────────────────────────────┐
-│ [Logo] CareLoop Dashboard  [Profil▾] │
-│ Ringkasan · Pasien · Alerts · Export │
-├───────────────────────────────────────┤
-│ 💥 Alert Darurat Aktif: 2            │ ← sticky, merah
-│   • Bu Ratna  (ALONE)  [Detail]      │
-│   • Pak Haji  (7 menit lalu) [Detail]│
-├───────────────────────────────────────┤
-│ Kepatuhan minggu ini: 89%  ▲ 4%       │
-│ [grafik garis kepatuhan 30 hari]      │
-│ [bar chart per penyakit]              │
-├───────────────────────────────────────┤
-│ Filter: [Puskesmas▾] [Penyakit▾]      │
-│         [Tanggal] [Risk▾]             │
-├───────────────────────────────────────┤
-│ Pasien Berisiko Tinggi (7)            │
-│  • Bu Ratna — 82/100 — Diabetes       │
-│  • ...                                 │
-└───────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│ [Logo] CareLoop NAKES   [dr. Siti (Puskesmas Jetis)▾] │
+│ Ringkasan Monitoring                                  │
+├────────────────────────────────────────────────────────┤
+│ 🚨 Alert Darurat Aktif: 2 (merah menyala / pulse)      │
+├────────────────────────────────────────────────────────┤
+│ Filter: [Wilayah] [Penyakit▾] [Dari-Sampai] [Status▾]  │
+│ [Terapkan] [Reset]  (tersimpan di URL query param)    │
+├────────────────────────────────────────────────────────┤
+│ KPI Cards:                                             │
+│ 1. Kepatuhan (Adherence): 88%  ▲ Naik                 │
+│    (105 tepat · 12 tunda · 15 terlewat)                │
+│ 2. Total Pasien: 120                                  │
+│ 3. Pasien Berisiko Tinggi: 7                           │
+│ 4. Darurat Aktif: 2                                   │
+│ 5. Eskalasi Aktif: 3                                  │
+├────────────────────────────────────────────────────────┤
+│ [ Grafik Garis Tren Harian (SVG) ] [ Bar Penyakit ]    │
+├────────────────────────────────────────────────────────┤
+│ Tabel Pasien Berisiko Tinggi (skor >= 70 / HIGH):      │
+│ • Bu Ratna — Alone — Diabetes — Skor 82 — Dosis Lewat 3│
+│ • Pak Slamet — With Family — Hipertensi — Skor 75      │
+└────────────────────────────────────────────────────────┘
 ```
+
+- **Rute Web (`apps/web`)**:
+  - `/login`: Form masuk nakes & admin (telepon/email + password) dengan tombol cepat demo hackathon.
+  - `/dashboard`: Halaman utama monitoring nakes.
+- **URL Query Param Sync (AC-5.2)**:
+  - Format: `/dashboard?district=347101&disease=DIABETES&from=2026-08-01&to=2026-08-16&escalationStatus=FAMILY_TIER_1`
+  - URL dapat di-bookmark dan dibagikan langsung. Saat di-refresh atau dibuka, input filter otomatis terisi dan API dipanggil sesuai query.
+- **State Handling**:
+  - *Loading State*: Skeleton placeholder beranimasi pulse.
+  - *Error State*: Pesan error jelas dan tombol "Coba Lagi".
+  - *Empty State*: Informasi ramah saat data nihil.
+
 
 ### 5.5 (C) Dashboard Nakes — Detail Alert Darurat
 
