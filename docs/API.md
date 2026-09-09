@@ -577,19 +577,95 @@ Refresh JWT dengan `refreshToken` di body.
 | GET | `/v1/dashboard/risk-patients` | NAKES (scope) | Pasien berisiko tinggi |
 | GET | `/v1/dashboard/alerts` | NAKES (scope) | Stream alert (juga via WS) |
 
+**GET /v1/dashboard/summary — 200:**
+```json
+{
+  "data": {
+    "totalPatients": 120,
+    "adherenceRate": 0.88,
+    "confirmedCount": 105,
+    "confirmedLateCount": 12,
+    "missedCount": 15,
+    "pendingCount": 8,
+    "activeEmergencies": 2,
+    "activeEscalations": 3,
+    "atRiskPatients": 5,
+    "trends": {
+      "dailyRate": 0.88,
+      "weeklyRate": 0.86,
+      "direction": "UP"
+    }
+  }
+}
+```
+
 **GET /v1/dashboard/adherence — 200:**
 ```json
 {
   "data": {
     "period": { "from": "2026-08-01", "to": "2026-08-16" },
     "series": [
-      { "date": "2026-08-01", "adherenceRate": 0.91, "confirmed": 82, "missed": 8 },
-      { "date": "2026-08-02", "adherenceRate": 0.87, "confirmed": 78, "missed": 12 }
+      { "date": "2026-08-01", "adherenceRate": 0.91, "confirmed": 82, "missed": 8, "total": 90 },
+      { "date": "2026-08-02", "adherenceRate": 0.87, "confirmed": 78, "missed": 12, "total": 90 }
     ],
     "byDisease": [
-      { "disease": "DIABETES", "adherenceRate": 0.89 },
-      { "disease": "HYPERTENSION", "adherenceRate": 0.84 }
+      { "disease": "DIABETES", "adherenceRate": 0.89, "total": 120 },
+      { "disease": "HYPERTENSION", "adherenceRate": 0.84, "total": 95 }
     ]
+  }
+}
+```
+
+**GET /v1/dashboard/risk-patients — 200:**
+```json
+{
+  "data": [
+    {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "fullName": "Bu Ratna",
+      "phone": "081234567890",
+      "districtCode": "3471",
+      "livingSituation": "ALONE",
+      "healthConditions": ["DIABETES", "HYPERTENSION"],
+      "riskScore": 82,
+      "riskLevel": "HIGH",
+      "adherenceRate": 0.55,
+      "missedDosesLastWeek": 3
+    }
+  ]
+}
+```
+
+**GET /v1/dashboard/alerts — 200:**
+```json
+{
+  "data": {
+    "emergencies": [
+      {
+        "id": "em-01",
+        "patientId": "11111111-1111-4111-8111-111111111111",
+        "patientName": "Bu Ratna",
+        "triggerType": "ANOMALY_HR",
+        "hrBpm": 145,
+        "status": "ESCALATING",
+        "triggeredAt": "2026-08-16T02:01:00.000Z",
+        "location": { "lat": -7.79, "lng": 110.37 },
+        "puskesmasId": "psk-1",
+        "districtCode": "3471"
+      }
+    ],
+    "escalations": [
+      {
+        "id": "esc-01",
+        "patientId": "11111111-1111-4111-8111-111111111111",
+        "patientName": "Bu Ratna",
+        "context": "SCHEDULE",
+        "status": "FAMILY_TIER_1",
+        "currentTier": "TIER_1",
+        "startedAt": "2026-08-16T08:00:00.000Z"
+      }
+    ],
+    "totalActive": 2
   }
 }
 ```
