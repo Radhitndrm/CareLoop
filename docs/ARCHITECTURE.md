@@ -294,7 +294,8 @@ Format: Status — **Accepted** | Proposed | Superseded.
 - **Keputusan**: Semua delayed job via BullMQ (Redis). State eskalasi di PostgreSQL, bukan di memori.
 - **Alasan**: Durability & observability; mudah retry.
 - **Konsekuensi**: Butuh Redis sebagai dependency; default `docker-compose`. Fallback sederhana: DB-poller `schedules` (untuk kasus tanpa Redis) — dipilih saat demo offline.
-- **Status**: Accepted.
+- **Implementasi**: `apps/api/src/lib/queue.ts` (`BullMqQueue` — restart-safe, `schedule`/`cancel`/`retry`, idempotent via `jobId`).
+- **Status**: Implemented (CL-104).
 
 ### ADR-004: Real-time alert via WebSocket (Socket.IO) untuk dashboard nakes
 - **Konteks**: Nakes butuh alert darurat instan; polling REST boros & lambat.
@@ -343,7 +344,8 @@ Format: Status — **Accepted** | Proposed | Superseded.
 - **Keputusan**: Dependency Redis dipakai bila tersedia; jika tidak, fallback DB-poller scheduler + in-process queue sederhana (tidak disarankan untuk production, cukup demo).
 - **Alasan**: Menjaga demo tetap jalan tanpa infrastruktur tambahan.
 - **Konsekuensi**: Implementasi queue dibuat abstraksi (`JobQueue` interface) dengan 2 implementasi: `BullMqQueue` (default) & `InProcessQueue` (demo).
-- **Status**: Accepted.
+- **Implementasi**: `apps/api/src/lib/queue.ts` — `createJobQueue` memilih `bullmq` bila `REDIS_URL` terisi, selain itu `in-process`; `registerQueueLifecycle` menutup worker+queue saat server stop.
+- **Status**: Implemented (CL-104).
 
 ---
 
