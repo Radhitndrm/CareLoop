@@ -198,6 +198,13 @@ describe('CL-214: Integration Test Fase 2 (M2 Darurat & Dashboard)', () => {
     vi.spyOn(prisma.patient as any, 'findMany').mockImplementation(async () => {
       return db.patients.map((p) => ({ ...p }))
     })
+    vi.spyOn(prisma.patient as any, 'update').mockImplementation(async ({ where, data }: any) => {
+      const index = db.patients.findIndex((p) => p.id === where.id)
+      if (index === -1) throw new Error(`Patient ${where.id} not found`)
+      const updated = { ...db.patients[index], ...data, updatedAt: new Date() }
+      db.patients[index] = updated
+      return updated
+    })
 
     // Mock Prisma EmergencyAlert
     vi.spyOn(prisma.emergencyAlert as any, 'findUnique').mockImplementation(async ({ where }: any) => {
