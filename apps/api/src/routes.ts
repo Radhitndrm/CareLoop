@@ -12,6 +12,7 @@ import { registerEducationRoutes } from './modules/education'
 import { registerFacilitiesRoutes } from './modules/facilities'
 import { registerRiskRoutes } from './modules/risk'
 import { registerExportRoutes } from './modules/export'
+import { registerWebhookRoutes } from './modules/webhook'
 
 export function registerRoutes(app: FastifyInstance): void {
   registerAuthRoutes(app)
@@ -27,4 +28,5 @@ export function registerRoutes(app: FastifyInstance): void {
   registerFacilitiesRoutes(app)
   registerRiskRoutes(app)
   registerExportRoutes(app)
+  registerWebhookRoutes(app)
 }
