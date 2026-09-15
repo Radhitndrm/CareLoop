@@ -199,12 +199,11 @@ describe('CL-214: Integration Test Fase 2 (M2 Darurat & Dashboard)', () => {
       return db.patients.map((p) => ({ ...p }))
     })
     vi.spyOn(prisma.patient as any, 'update').mockImplementation(async ({ where, data }: any) => {
-      const idx = db.patients.findIndex((pt) => pt.id === where.id)
-      if (idx !== -1) {
-        db.patients[idx] = { ...db.patients[idx], ...data }
-        return { ...db.patients[idx] }
-      }
-      return null
+      const index = db.patients.findIndex((p) => p.id === where.id)
+      if (index === -1) throw new Error(`Patient ${where.id} not found`)
+      const updated = { ...db.patients[index], ...data, updatedAt: new Date() }
+      db.patients[index] = updated
+      return updated
     })
 
     // Mock Prisma EmergencyAlert
