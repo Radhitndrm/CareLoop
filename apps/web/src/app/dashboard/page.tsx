@@ -21,7 +21,7 @@ import { EmergencyPanel } from '../../components/dashboard/emergency-panel'
 
 function DashboardContent() {
   const searchParams = useSearchParams()
-  const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const { isAuthenticated, isLoading: authLoading, token } = useAuth()
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [adherence, setAdherence] = useState<DashboardAdherence | null>(null)
@@ -40,6 +40,11 @@ function DashboardContent() {
     let isCancelled = false
 
     async function fetchData() {
+      if (!token) {
+        setIsLoading(false)
+        return
+      }
+
       try {
         const filter: DashboardFilterInput = {
           district: districtParam,
@@ -79,7 +84,7 @@ function DashboardContent() {
     return () => {
       isCancelled = true
     }
-  }, [districtParam, diseaseParam, fromParam, toParam, escalationStatusParam, reloadKey])
+  }, [districtParam, diseaseParam, fromParam, toParam, escalationStatusParam, reloadKey, token])
 
   return (
     <div className="space-y-6">
