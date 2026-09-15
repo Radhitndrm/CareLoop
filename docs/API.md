@@ -809,7 +809,7 @@ Menampung push dari Google Fit/HealthKit → sama seperti `POST /v1/vitals`. Aut
 
 ### POST `/webhooks/whatsapp`
 Public endpoint yang dipanggil Meta/Twilio. Verifikasi signature:
-- Header `X-Hub-Signature-256` (Meta) — HMAC-SHA256 dari raw body dengan `WA_WEBHOOK_APP_SECRET`.
+- Header `X-Hub-Signature-256` (Meta) — HMAC-SHA256 dari raw body dengan `WA_APP_SECRET`.
 - Webhook config: `hub.verify_token` pada setup.
 
 **Payload contoh (Meta interactive button reply):**
