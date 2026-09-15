@@ -1,12 +1,18 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../lib/auth'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login } = useAuth()
+  const { login, isAuthenticated } = useAuth()
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push('/dashboard')
+    }
+  }, [isAuthenticated, router])
 
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -85,7 +91,7 @@ export default function LoginPage() {
               id="identifier"
               type="text"
               required
-              placeholder="Contoh: 081200000001 atau dokter@careloop.id"
+              placeholder="Contoh: 081100000001 atau dokter@careloop.id"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               className="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 px-4 py-2.5 text-sm text-zinc-900 focus:bg-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-100"
@@ -127,20 +133,13 @@ export default function LoginPage() {
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3 text-center">
             Demo Hackathon — Isi Cepat
           </p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <button
               type="button"
-              onClick={() => fillDemo('081200000001', 'password123')}
-              className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-300"
+              onClick={() => fillDemo('081100000001', 'CareLoop#Demo2026')}
+              className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-300 text-center"
             >
-              🩺 Dokter Puskesmas
-            </button>
-            <button
-              type="button"
-              onClick={() => fillDemo('admin@careloop.id', 'password123')}
-              className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-300"
-            >
-              🏛️ Admin Dinkes
+              🩺 Dokter Puskesmas (dr. Dewi Lestari)
             </button>
           </div>
         </div>
