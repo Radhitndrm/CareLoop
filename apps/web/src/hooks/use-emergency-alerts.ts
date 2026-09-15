@@ -53,7 +53,10 @@ interface EmergencyAckPayload {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
+import { useAuth } from '../lib/auth'
+
 export function useEmergencyAlerts() {
+  const { token } = useAuth()
   const [alerts, setAlerts] = useState<EmergencyAlertItem[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -62,6 +65,10 @@ export function useEmergencyAlerts() {
 
   // 1. Fetch data lewat REST API (/v1/dashboard/alerts)
   const loadAlertsFromRest = useCallback(async () => {
+    if (!token) {
+      setIsLoading(false)
+      return
+    }
     try {
       const data: ActiveAlerts = await getDashboardAlerts()
       const mapped: EmergencyAlertItem[] = (data.emergencies || []).map((e) => {
@@ -90,13 +97,17 @@ export function useEmergencyAlerts() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [token])
 
   // 2. Hubungkan ke WebSocket Server (CL-208) + Fallback Polling
   useEffect(() => {
     let isCancelled = false
 
     async function initialFetch() {
+      if (!token) {
+        setIsLoading(false)
+        return
+      }
       try {
         const data: ActiveAlerts = await getDashboardAlerts()
         if (isCancelled) return
@@ -139,7 +150,6 @@ export function useEmergencyAlerts() {
       void initialFetch()
     }, 30000)
 
-    const token = getStoredToken()
     if (token) {
       const socket: Socket = io(API_BASE_URL, {
         auth: { token },
@@ -209,7 +219,7 @@ export function useEmergencyAlerts() {
         socketRef.current = null
       }
     }
-  }, [])
+  }, [token])
 
   // 3. Aksi "Saya Tangani" (AC-4.5, CL-207, CL-212)
   const handleEmergency = async (alert: EmergencyAlertItem, note?: string) => {
