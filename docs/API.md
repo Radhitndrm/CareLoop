@@ -848,10 +848,34 @@ Public endpoint yang dipanggil Meta/Twilio. Verifikasi signature:
 **Aturan handler:**
 1. Verifikasi signature (HMAC) — jika gagal `401`.
 2. Cek duplikat `message.id` (sudah di `compliance_logs.source_message_id`) → `200 OK` tanpa proses.
-3. Parsing `button_reply.id` → intent (`CONFIRM_TAKEN|DEFER|SAFE|NEED_HELP|HANDLE`) + resource id.
+3. Parsing `button_reply.id` → intent + resource id (format di [§6.1](#61-format-button_replyid)).
 4. Eksekusi service terkait (compliance confirm / emergency response / escalation respond).
 5. Selalu balas `200 OK` (Meta butuh cepat; pemrosesan async + status 200).
 6. Message masuk non-interactive (teks biasa) → route ke chatbot edukasi (§3.10) atau fallback.
+
+### 6.1 Format `button_reply.id`
+
+Tombol reply memakai format `<INTENT>_<resourceId>` (contoh `CONFIRM_TAKEN_9c2e…`).
+Parser di `apps/api/src/integrations/whatsapp/parser.ts` (`parseButtonReply`) mengurai intent + resource id.
+Id tak dikenal (termasuk tombol URL `CALL_112` / `MAPS`) dikembalikan `null`.
+
+| Intent | Button id (contoh) | Digunakan di | resource id |
+|---|---|---|---|
+| `CONFIRM_TAKEN` | `CONFIRM_TAKEN_<scheduleId>` | Reminder: pasien "Sudah Minum" (FR-2) | id jadwal |
+| `DEFER` | `DEFER_<scheduleId>` | Reminder: "Tunda 15 menit" (FR-2.4) | id jadwal |
+| `SAFE` | `SAFE_<emergencyId>` | Konfirmasi darurat: "Saya aman" (FR-4.4) | id darurat |
+| `NEED_HELP` | `NEED_HELP_<emergencyId>` | Konfirmasi darurat: butuh bantuan → langsung eskalasi | id darurat |
+| `HANDLE` | `HANDLE_<escalationRunId>` | Keluarga/nakes: "Saya tangani" (FR-7.3) | id run eskalasi |
+
+Tombol URL (bukan reply, tidak di-parse sebagai intent):
+
+| id | Tujuan | Keterangan |
+|---|---|---|
+| `CALL_112` | `tel:112` | Deep-link satu ketukan ke 112 — **one-tap call, bukan auto-dial** (ADR-008). |
+| `MAPS` | `https://maps.google.com/?q=lat,lng` | Peta lokasi pasien saat darurat. |
+
+Template & komposisi pesan ada di `apps/api/src/integrations/whatsapp/templates.ts`. Pesan menghadap
+pengguna dalam Bahasa Indonesia dan hanya memuat PII minimal (nama pasien/obat boleh; NIK/tanggal lahir tidak pernah).
 
 ---
 
