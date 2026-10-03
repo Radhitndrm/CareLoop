@@ -7,9 +7,14 @@ import {
 
 export function registerWebhookRoutes(app: FastifyInstance): void {
   app.register(async (scoped) => {
-    scoped.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => {
+    // Verifikasi signature HMAC wajib menghitung digest atas byte persis seperti yang
+    // dikirim Meta, bukan atas body yang sudah di-parse ulang. Buffer asli disimpan di
+    // `req.rawBody` supaya handler bisa membandingkannya dengan header X-Hub-Signature-256.
+    scoped.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
+      const raw = body as Buffer
+      ;(req as unknown as Record<string, unknown>).rawBody = raw
       try {
-        done(null, JSON.parse(body.toString('utf8')))
+        done(null, JSON.parse(raw.toString('utf8')))
       } catch (err) {
         done(err as Error)
       }
