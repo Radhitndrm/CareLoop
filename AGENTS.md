@@ -191,6 +191,7 @@ Sumber tunggal untuk api: `apps/api/src/lib/env.ts` (validasi zod, gagal = start
 | `ESCALATION_NAKES_WAIT_SEC` | api | `1800` | Timeout tier nakes |
 | `EMERGENCY_PATIENT_CONFIRM_SEC` | api | `45` | FR-4.3 — dibatasi 30–60 detik |
 | `COMPLIANCE_DEFER_MINUTES` | api | `15` | FR-2.4 — opsi "tunda" |
+| `COMPLIANCE_CONFIRM_MAX_LATE_MINUTES` | api | `1440` | CL-107 — konfirmasi lewat dari ini ditolak `422` |
 | `ANOMALY_HR_MIN` / `ANOMALY_HR_MAX` | api | `50` / `120` | FR-4.2 — ambang anomali HR |
 | `ANOMALY_WINDOW_SEC` | api | `60` | FR-4.2 — jendela 2 bacaan berurutan |
 | `NEXT_PUBLIC_API_URL` | web | — | Base URL API |

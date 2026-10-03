@@ -236,14 +236,34 @@ Refresh JWT dengan `refreshToken` di body.
   "data": {
     "logId": "1f0c7b2e-5d43-4a91-8e6c-7b0a9d3f2e58",
     "scheduleId": "9c2e4d5a-0b17-4c8e-9a3f-1d6b8e2f4c30",
+    "scheduledAt": "2026-08-16T01:00:00Z",
     "status": "CONFIRMED",
     "confirmedAt": "2026-08-16T01:12:00Z",
-    "escalationCancelled": true
+    "escalationCancelled": true,
+    "escalationRunId": "5b7e1c40-9a2f-4d18-8c33-2e6f0d1a4b90"
   }
 }
 ```
 - `channel` menerima subset `Channel`: `IN_APP` (default), `WHATSAPP`, `VOICE`.
-- Idempoten: konfirmasi ganda → `409 ALREADY_PROCESSED` (atau mengembalikan log yang sama dengan `200`).
+- **Slot yang dikonfirmasi** ditentukan server, bukan dikirim klien: slot jatuh tempo terakhir pada
+  jadwal tersebut, dihitung dari `timeOfDay` + zona waktu pasien. Kalau tidak ada slot jatuh tempo
+  dalam batas keterlambatan → `422 INVALID_TRANSITION`.
+- **Klasifikasi status** — `scheduledAt` adalah waktu jadwal, `confirmedAt` waktu tombol ditekan:
+  - `CONFIRMED` — ditekan pada atau dalam `timeWindowMinutes` jadwal (batas inklusif).
+  - `CONFIRMED_LATE` — ditekan setelah time window, tetapi masih di bawah batas keterlambatan.
+    Status tidak pernah menjadi `MISSED` dari endpoint ini; `MISSED` adalah hasil scheduler.
+- **Batas keterlambatan** dikonfigurasi lewat `COMPLIANCE_CONFIRM_MAX_LATE_MINUTES`
+  (default `1440` = 24 jam, rentang 5–10080). Di atas itu → `422 INVALID_TRANSITION`.
+- **Idempoten** dijamin unique index `compliance_logs (schedule_id, scheduled_at)`, bukan
+  pengecekan di aplikasi — dua permintaan bersamaan tetap menghasilkan satu record.
+  Konfirmasi ganda → `409 ALREADY_PROCESSED` dengan `details.logId` record yang sudah ada.
+  Percobaan ulang tetap mencoba menutup run eskalasi yang mungkin gagal ditutup sebelumnya.
+- **Eskalasi**: jika ada `escalation_runs` aktif untuk jadwal tersebut, event `PATIENT_CONFIRMED`
+  menutupnya menjadi `RESOLVED` dengan `resolution_type = PATIENT_CONFIRMED`
+  (`escalationCancelled: true`, `escalationRunId` terisi).
+- **Role hanya `PATIENT`** dan jadwal harus milik pasien itu sendiri (`403` kalau bukan).
+  Nakes/admin tidak boleh dicatat lewat endpoint ini karena konfirmasi adalah bukti pasien
+  minum obat sendiri; konfirmasi oleh petugas dicatat lewat modul `compliance` yang relevan.
 - **Konfirmasi via WhatsApp** masuk lewat webhook (lihat §6) — bukan endpoint ini.
 
 ### 3.4 Vital & Anomali (Fitur 4)

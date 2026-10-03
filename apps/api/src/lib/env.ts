@@ -73,6 +73,12 @@ export const envSchema = z
     EMERGENCY_PATIENT_CONFIRM_SEC: z.coerce.number().int().min(30).max(60).default(45),
     /** FR-2.4: opsi "tunda". */
     COMPLIANCE_DEFER_MINUTES: z.coerce.number().int().min(5).max(120).default(15),
+    /**
+     * Batas keterlambatan konfirmasi yang masih diterima (menit). Setelah ini slot
+     * dianggap basi dan konfirmasi ditolak 422 — bukan dicatat, supaya adherence tidak
+     * bisa "dibersihkan" oleh konfirmasi basi (AC-2.3 + scope CL-107).
+     */
+    COMPLIANCE_CONFIRM_MAX_LATE_MINUTES: z.coerce.number().int().min(5).max(10_080).default(1440),
 
     // Aturan anomali HR (FR-4.2) — rule-based, bukan ML.
     ANOMALY_HR_MIN: z.coerce.number().int().min(20).max(200).default(50),

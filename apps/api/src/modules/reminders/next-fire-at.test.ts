@@ -141,4 +141,25 @@ describe('nextFireAt — validasi input', () => {
     const fire = nextFireAt({ timeOfDay: '08:00' }, { after: '2024-01-01T00:00:00Z' })
     expect(fire!.toISOString()).toBe('2024-01-01T01:00:00.000Z')
   })
+
+  // schedules.end_date nullable: Prisma mengembalikan null, bukan undefined. Kalau null
+  // diteruskan apa adanya, ia jadi epoch 1970 dan seluruh jadwal terbaca sudah berakhir.
+  it('startDate/endDate null berarti tanpa batas, bukan epoch', () => {
+    const tanpaBatas = nextFireAt(
+      { timeOfDay: '08:00', timezone: 'Asia/Jakarta', startDate: null, endDate: null },
+      { after: '2024-01-01T00:00:00Z' },
+    )
+    expect(tanpaBatas!.toISOString()).toBe('2024-01-01T01:00:00.000Z')
+
+    const mulaiSaja = nextFireAt(
+      {
+        timeOfDay: '08:00',
+        timezone: 'Asia/Jakarta',
+        startDate: new Date('2024-01-03T00:00:00Z'),
+        endDate: null,
+      },
+      { after: '2024-01-01T00:00:00Z' },
+    )
+    expect(mulaiSaja!.toISOString()).toBe('2024-01-03T01:00:00.000Z')
+  })
 })

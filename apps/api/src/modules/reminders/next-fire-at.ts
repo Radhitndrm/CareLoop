@@ -12,9 +12,14 @@ export interface ReminderScheduleInput {
   /** Zona waktu IANA pasien (users.timezone, default Asia/Jakarta). */
   timezone?: string
   /** Batas awal (inklusif) — tanggal lokal pasien, "YYYY-MM-DD" atau Date. */
-  startDate?: string | Date
-  /** Batas akhir (inklusif) — tanggal lokal pasien, "YYYY-MM-DD" atau Date. */
-  endDate?: string | Date
+  startDate?: string | Date | null
+  /**
+   * Batas akhir (inklusif) — tanggal lokal pasien, "YYYY-MM-DD" atau Date.
+   * `null` berarti jadwal tanpa batas akhir (hasil kolom `schedules.end_date` yang
+   * nullable). Wajib diperlakukan sama dengan "tidak ada batas": kalau `null` diteruskan
+   * apa adanya ke `Date`, ia jadi epoch 1970 dan semua jadwal terbaca sudah berakhir.
+   */
+  endDate?: string | Date | null
 }
 
 export interface NextFireAtOptions {
@@ -153,10 +158,11 @@ export function nextFireAt(
         ? new Date(options.after)
         : new Date(options.after.getTime())
   const afterMs = after.getTime()
-
+  // `== null` (bukan `=== undefined`): kolom schedule nullable dibaca Prisma sebagai null,
+  // dan null di sini berarti "tanpa batas", bukan tanggal epoch.
   const startKey =
-    schedule.startDate === undefined ? null : toLocalDateKey(schedule.startDate, timezone)
-  const endKey = schedule.endDate === undefined ? null : toLocalDateKey(schedule.endDate, timezone)
+    schedule.startDate == null ? null : toLocalDateKey(schedule.startDate, timezone)
+  const endKey = schedule.endDate == null ? null : toLocalDateKey(schedule.endDate, timezone)
 
   // Iterasi per tanggal lokal (dikunci pada 12:00 waktu setempat saat maju satu hari
   // supaya penjumlahan hari tidak melompati/memotong hari karena offset berubah).
