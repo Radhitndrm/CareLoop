@@ -248,6 +248,8 @@ export const AuditAction = {
   FAMILY_CONTACT_REMOVED: 'family_contact.removed',
   COMPLIANCE_CONFIRMED: 'compliance.confirmed',
   COMPLIANCE_DEFERRED: 'compliance.deferred',
+  REMINDER_SENT: 'reminder.sent',
+  REMINDER_FAILED: 'reminder.failed',
   EMERGENCY_TRIGGERED: 'emergency.triggered',
   EMERGENCY_RESOLVED: 'emergency.resolved',
   ESCALATION_STEP: 'escalation.step',

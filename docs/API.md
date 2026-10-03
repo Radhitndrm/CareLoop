@@ -794,8 +794,15 @@ Handshake dengan `auth: { token: JWT }`. Server memvalidasi & membuka room sesua
 
 ## 5. Scheduler / Webhook (Server-to-Server)
 
-### POST `/internal/jobs/reminder` (internal service)
-Dipanggil worker scheduler untuk membangun & mengirim reminder. Body: `{ scheduleId, dueAt }`. Response: `{ reminderLogId }`.
+### POST `/internal/jobs/reminder` (internal service) — **belum diimplementasikan**
+Rencana endpoint yang dipanggil worker scheduler untuk membangun & mengirim reminder.
+Body: `{ scheduleId, dueAt }`. Response: `{ reminderLogId }`.
+
+CL-106 sudah menyediakan job handler-nya (`modules/reminders/reminder.worker.ts` →
+`handleReminderJob`) dan antrean `reminder` (`createReminderJobQueue`), tetapi belum
+membuka endpoint HTTP. Pemicu job saat ini hanya queue langsung; penjadwalan periodik
+yang memindai `schedules` dan meng-enqueue job belum ada (CL-105 baru
+`nextFireAt`). Token `SERVICE_TOKEN` untuk `/internal/*` juga belum ada di `lib/env.ts`.
 
 ### POST `/internal/jobs/escalation-timeout` (internal service)
 Dipanggil BullMQ saat timeout state machine. Body: `{ runId, currentState }`. Response: `{ newState }` atau `422` jika state sudah berubah (idempoten).

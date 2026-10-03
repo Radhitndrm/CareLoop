@@ -31,7 +31,7 @@ export function buildReminderBody(
   return {
     body: `Ingatan minum obat: ${data.medicationName} - ${data.doseQty} pada pukul ${data.timeOfDay}. Sudah diminum?`,
     header: 'Minum Obat',
-    footer: 'Tekan "Sudah Minum", atau "Tunda 15 menit" bila belum waktunya.',
+    footer: 'Tekan "Sudah Minum" atau "Tunda 15 menit" bila belum siap.',
     buttons: [
       {
         type: 'REPLY',
@@ -52,7 +52,7 @@ export function buildPatientConfirmBody(context: string, emergencyId: string): W
   return {
     body: `${context}\n\nApakah Anda aman?`,
     header: 'Cek Kondisi',
-    footer: 'Laporkan kondisi Anda dengan satu ketukan. Tidak merespons akan memicu bantuan.',
+    footer: 'Satu ketukan untuk melapor. Tidak merespons memicu bantuan.',
     buttons: [
       { type: 'REPLY', id: buildButtonId(WaButtonIntent.SAFE, emergencyId), title: 'Saya Aman' },
       {
