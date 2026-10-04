@@ -8,7 +8,7 @@ import {
   buildPatientConfirmBody,
   buildReminderBody,
 } from './templates'
-import type { WaButton } from './types'
+import { outboundWhatsAppMessageSchema, type WaButton, type WaInteractiveBody } from './types'
 
 const SCHEDULE_ID = '9c2e4d5a-0b17-4c8e-9a3f-1d6b8e2f4c30'
 const EMERGENCY_ID = 'e1'
@@ -159,5 +159,68 @@ describe('buildNakesAlertBody — alert prioritas nakes', () => {
     expect(body.body).not.toContain('nik')
     expect(body.body).not.toContain('+628')
     expect(body.body).not.toContain('telepon pasien')
+  })
+})
+
+// Setiap template harus lolos validasi outbound yang sama dengan yang dipakai
+// WhatsAppService. Tanpa test ini, footer yang melebihi batas 60 karakter hanya
+// baru ketahuan saat runtime dan membuat seluruh pesan ditolak zod.
+describe('validasi batas schema outbound', () => {
+  const RECIPIENT = '6281234567890'
+
+  function expectSendable(interactive: WaInteractiveBody, label: string) {
+    const parsed = outboundWhatsAppMessageSchema.safeParse({
+      kind: 'INTERACTIVE',
+      to: RECIPIENT,
+      interactive,
+    })
+    const detail = parsed.success
+      ? ''
+      : ` — ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`
+    expect(parsed.success, `${label} ditolak schema${detail}`).toBe(true)
+  }
+
+  it('buildReminderBody', () => {
+    expectSendable(
+      buildReminderBody({ medicationName: 'Metformin 500 mg', doseQty: '1 tablet', timeOfDay: '08:00' }, SCHEDULE_ID),
+      'buildReminderBody',
+    )
+  })
+
+  it('buildPatientConfirmBody', () => {
+    expectSendable(
+      buildPatientConfirmBody('Deteksi detak jantung tinggi: 145 bpm', EMERGENCY_ID),
+      'buildPatientConfirmBody',
+    )
+  })
+
+  it('buildFamilyAlertBody', () => {
+    expectSendable(
+      buildFamilyAlertBody(
+        {
+          patientName: 'Bu Ratna',
+          context: 'Tidak merespons konfirmasi minum obat',
+          location: { label: 'Kota Bandung', mapsUrl: 'https://maps.example/id' },
+          instruction: 'Telepon Bu Ratna sekarang.',
+        },
+        RUN_ID,
+      ),
+      'buildFamilyAlertBody',
+    )
+  })
+
+  it('buildNakesAlertBody', () => {
+    expectSendable(
+      buildNakesAlertBody(
+        {
+          patientName: 'Bu Ratna',
+          context: 'Tidak merespons konfirmasi minum obat',
+          location: null,
+          instruction: 'Kunjungi hari ini.',
+        },
+        RUN_ID,
+      ),
+      'buildNakesAlertBody',
+    )
   })
 })

@@ -156,7 +156,7 @@ Semua integration di `apps/api/src/integrations/*`, masing-masing punya interfac
 - `WhatsAppService` (CL-101) — satu-satunya jalur keluar pesan WhatsApp: `sendText`, `sendTemplate`, `sendInteractive` (tombol `REPLY` untuk konfirmasi 1-tap, tombol `URL` untuk deep-link `tel:112`/maps), `sendAudio`; retry backoff eksponensial (total 3×, FR-1.3). Provider lewat interface `WhatsAppProvider` agar bisa di-swap: `MockWhatsAppProvider` (dry-run + mencatat payload, default `PROVIDER_MODE=mock`) & `MetaCloudApiProvider` (stub — integrasi riil menyusul pasca CL-101).
 - `SmartwatchAdapter` — `fetchRecentHeartRate(patientId)`, `subscribeVitalsStream()`. Implementasi: Google Fit API / HealthKit. Mock: generator sintetis + endpoint `/dev/mock-anomaly`.
 - `LocationService` — ambil lokasi terakhir tersimpan / resolve geocode; integrasi Maps.
-- `TtsService` — generate audio reminder Bahasa Indonesia.
+- `TtsService` (CL-106 stub) — `synthesize(text, { locale })` → `{ audioUrl }`. Saat ini hanya `MockTtsService` (URL audio dummy, tidak pernah memanggil vendor); TTS sungguhan menyusul di CL-305. Pemanggil reminder (`modules/reminders/reminder.worker.ts`) memakai stub ini untuk `patients.voice_enabled` (RM-3) dan mencatat kegagalan TTS sebagai baris `reminder_logs` kanal `VOICE` berstatus `FAILED` tanpa menggagalkan reminder teks (RM-4).
 - `SmsGateway` (opsional fallback), `BpjsApi` (placeholder stub), `OcrResep` (stub).
 
 ### 3.5 Data Layer
@@ -194,6 +194,17 @@ sequenceDiagram
     API->>ESC: cancel pending escalation for this schedule
     Note over ESC: eskalasi tidak jadi jalan
 ```
+
+**Retry reminder (CL-106).** Retry hanya ada di satu lapis saja: worker reminder
+(`modules/reminders/reminder.worker.ts`) mencoba maksimal 3× dan mencatat tiap
+percobaan sebagai baris `reminder_logs` (`RETRYING` lalu `FAILED`), memakai
+`createWhatsAppService({ maxAttempts: 1 })` agar retry internal `WhatsAppService`
+dimatikan. Antrean `reminder` dibuat dengan `defaultAttempts: 1` supaya BullMQ tidak
+mengulang job — kalau dua-duanya aktif, satu slot jadwal bisa terkirim 3 × 3 = 9 kali.
+Kegagalan TOTAL tidak melempar error (sudah tersimpan di `reminder_logs`), sedangkan
+kegagalan pembuatan escalation run sengaja dibiarkan melempar: reminder sudah terkirim
+jadi tidak ada risiko kirim ganda, dan pasien yang tidak dikonfirmasi justru butuh
+jaring pengaman — kegagalan harus terlihat di antrean, bukan tenggelam.
 
 ### 4.2 Flow Darurat Anomali (Fitur 4 + 7)
 

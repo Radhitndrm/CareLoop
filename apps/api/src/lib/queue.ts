@@ -61,6 +61,13 @@ interface InProcessJob {
   state: InProcessJobState
 }
 
+export interface InProcessQueueOptions {
+  /** Jumlah percobaan termasuk percobaan pertama, default 3. */
+  defaultAttempts?: number
+  /** Backoff antar percobaan dalam ms, default 1000. */
+  defaultBackoffMs?: number
+}
+
 /**
  * Fallback tanpa Redis untuk demo & unit test (ADR-010).
  * Menggunakan setTimeout: state hilang saat proses mati — dimaklumi untuk demo.
@@ -69,11 +76,15 @@ export class InProcessQueue<TPayload> implements JobQueue<TPayload> {
   readonly name: string
   private readonly jobs = new Map<string, InProcessJob>()
   private readonly handler: QueueJobHandler<TPayload>
+  private readonly defaultAttempts: number
+  private readonly defaultBackoffMs: number
   private closed = false
 
-  constructor(name: string, handler: QueueJobHandler<TPayload>) {
+  constructor(name: string, handler: QueueJobHandler<TPayload>, opts: InProcessQueueOptions = {}) {
     this.name = name
     this.handler = handler
+    this.defaultAttempts = Math.max(1, Math.floor(opts.defaultAttempts ?? 3))
+    this.defaultBackoffMs = Math.max(0, Math.floor(opts.defaultBackoffMs ?? 1000))
   }
 
   async enqueue(payload: TPayload, opts: ScheduleQueueJobOptions = {}): Promise<string> {
@@ -97,9 +108,9 @@ export class InProcessQueue<TPayload> implements JobQueue<TPayload> {
     const job: InProcessJob = {
       jobId,
       payload,
-      attempts: opts.attempts ?? 3,
+      attempts: opts.attempts ?? this.defaultAttempts,
       attemptsMade: 0,
-      backoffMs: opts.backoffMs ?? 1000,
+      backoffMs: opts.backoffMs ?? this.defaultBackoffMs,
       state: 'delayed',
     }
     this.jobs.set(jobId, job)
@@ -323,7 +334,10 @@ export function createJobQueue<TPayload>(
     const connection = opts.connection ?? parseRedisUrl(process.env.REDIS_URL)
     return new BullMqQueue(opts.name, opts.handler, { ...opts, connection })
   }
-  return new InProcessQueue(opts.name, opts.handler)
+  return new InProcessQueue(opts.name, opts.handler, {
+    defaultAttempts: opts.defaultAttempts,
+    defaultBackoffMs: opts.defaultBackoffMs,
+  })
 }
 
 /** Tutup semua queue saat server ditutup (Fastify onClose) — restart/stop aman. */
