@@ -40,6 +40,9 @@ export type CompliancePrismaClient = {
   complianceLog: {
     findUnique(args: any): Promise<any>
     create(args: any): Promise<any>
+    findMany(args: any): Promise<any[]>
+    count(args: any): Promise<number>
+    groupBy(args: any): Promise<any[]>
   }
   escalationRun?: {
     findFirst(args: any): Promise<any>
@@ -203,12 +206,21 @@ export async function confirmMedicationIntake(
       timeWindowMinutes: true,
       startDate: true,
       endDate: true,
+      status: true,
       patient: { select: { user: { select: { timezone: true } } } },
     },
   })
 
   if (!schedule) {
     throw notFound(`Jadwal ${input.scheduleId} tidak ditemukan`)
+  }
+
+  // Preskripsi yang belum disahkan dokter tidak boleh dikonfirmasi: konfirmasi
+  // berarti pasien minum obat resmi, dan itu menyesatkan bila resepnya masih draft
+  // (docs/API.md §3.2). Jadwal tanpa kolom status dibaca sebagai APPROVED agar
+  // data lama yang belum dimigrasikan tidak ikut kehilangan konfirmasi.
+  if (schedule.status && schedule.status !== 'APPROVED') {
+    throw invalidTransition('Preskripsi ini belum disetujui dokter')
   }
 
   const confirmedAt = input.now ?? new Date()
@@ -351,5 +363,124 @@ export function assertScheduleOwner(input: {
 }): void {
   if (input.claimsRole === 'PATIENT' && input.claimsSub !== input.patientId) {
     throw forbidden('Jadwal ini bukan milik Anda')
+  }
+}
+
+export interface ComplianceListItem {
+  id: string
+  scheduledAt: string
+  confirmedAt: string | null
+  status: string
+  channel: string
+  medicationName: string
+  scheduleId: string
+  timeOfDay: string
+  doseQty: string
+}
+
+export interface ComplianceListResult {
+  items: ComplianceListItem[]
+  total: number
+  limit: number
+  offset: number
+  summary: {
+    confirmed: number
+    confirmedLate: number
+    missed: number
+    pending: number
+    adherenceRate: number
+  }
+}
+
+/**
+ * Timeline konfirmasi minum obat untuk satu pasien — sisi nakes.
+ *
+ * Pasien pressing "sudah minum" lewat WhatsApp atau tombol di app akan muncul
+ * di sini sebagai CONFIRMED/CONFIRMED_LATE, sehingga perawat dan dokter bisa
+ * melihat kepatuhan tanpa menghitung ulang dari agregat dashboard.
+ */
+export async function listPatientCompliance(
+  client: CompliancePrismaClient,
+  params: {
+    patientId: string
+    from?: string | Date | null
+    to?: string | Date | null
+    status?: string | null
+    limit: number
+    offset: number
+  },
+): Promise<ComplianceListResult> {
+  const where: Record<string, unknown> = { patientId: params.patientId }
+
+  if (params.status) where.status = params.status
+
+  const dateFilter: Record<string, Date> = {}
+  if (params.from) dateFilter.gte = new Date(params.from)
+  if (params.to) dateFilter.lte = new Date(params.to)
+  if (Object.keys(dateFilter).length > 0) where.scheduledAt = dateFilter
+
+  const [records, total, grouped] = await Promise.all([
+    client.complianceLog.findMany({
+      where,
+      select: {
+        id: true,
+        scheduledAt: true,
+        confirmedAt: true,
+        status: true,
+        channel: true,
+        scheduleId: true,
+        schedule: {
+          select: {
+            timeOfDay: true,
+            doseQty: true,
+            medication: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { scheduledAt: 'desc' },
+      take: params.limit,
+      skip: params.offset,
+    }),
+    client.complianceLog.count({ where }),
+    client.complianceLog.groupBy({
+      by: ['status'],
+      where,
+      _count: { _all: true },
+    }),
+  ])
+
+  const counts: Record<string, number> = {}
+  for (const row of grouped as unknown as Array<{ status: string; _count: { _all: number } }>) {
+    counts[row.status] = row._count._all
+  }
+
+  const confirmed = counts.CONFIRMED ?? 0
+  const confirmedLate = counts.CONFIRMED_LATE ?? 0
+  const missed = counts.MISSED ?? 0
+  const pending = counts.PENDING ?? 0
+  const decided = confirmed + confirmedLate + missed
+
+  return {
+    items: records.map((record: any) => ({
+      id: record.id,
+      scheduledAt: record.scheduledAt.toISOString(),
+      confirmedAt: record.confirmedAt ? record.confirmedAt.toISOString() : null,
+      status: record.status,
+      channel: record.channel,
+      medicationName: record.schedule?.medication?.name ?? 'Obat',
+      scheduleId: record.scheduleId,
+      timeOfDay: record.schedule?.timeOfDay ?? '',
+      doseQty: record.schedule?.doseQty ?? '',
+    })),
+    total,
+    limit: params.limit,
+    offset: params.offset,
+    summary: {
+      confirmed,
+      confirmedLate,
+      missed,
+      pending,
+      adherenceRate: decided > 0 ? Math.round(((confirmed + confirmedLate) / decided) * 100) / 100 : 0,
+    },
   }
 }

@@ -1,22 +1,74 @@
 import React, { useEffect, useState } from 'react'
-import {
-  Linking,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { SafeAreaView, StyleSheet, Text, View, Linking, Pressable } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
+import { AuthScreen } from './src/screens/AuthScreen'
 import { ConfirmScreen } from './src/screens/ConfirmScreen'
 import { EmergencyScreen } from './src/screens/EmergencyScreen'
+import { RequestMedicationScreen } from './src/screens/RequestMedicationScreen'
+import {
+  MedicationRequestsScreen,
+  loadMyRequests,
+} from './src/screens/MedicationRequestsScreen'
+import {
+  getMyMedications,
+  type MedicationOption,
+  type MedicationRequestItem,
+} from './src/services/api'
 import { parseConfirmationUrl } from './src/services/linking'
+import { clearStoredToken, getStoredToken } from './src/services/auth'
+import { TopTabs, type TabKey } from './src/components/TopTabs'
+import { colors, spacing, typography } from './src/theme/tokens'
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'CONFIRM' | 'EMERGENCY'>('CONFIRM')
+  // Gate auth: tanpa token di secure store, seluruh layar hanya menampilkan login OTP.
+  // hanya menghasilkan 401 yang membingungkan pasien.
+  const [authState, setAuthState] = useState<'CHECKING' | 'AUTHED' | 'ANONYMOUS'>('CHECKING')
+
+  useEffect(() => {
+    let cancelled = false
+    void getStoredToken().then((token) => {
+      if (!cancelled) setAuthState(token ? 'AUTHED' : 'ANONYMOUS')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Aplikasi pasien punya empat tab. Tiga pertama adalah tindakan harian pasien;
+  // yang keempat adalah farmasi — patients request drugs here, and the request
+  // goes to the doctor's web dashboard for approval.
+  const [activeTab, setActiveTab] = useState<TabKey>('CONFIRM')
   const [activeScheduleId, setActiveScheduleId] = useState<string | undefined>(undefined)
   const [activeEmergencyId, setActiveEmergencyId] = useState<string | undefined>(undefined)
   const [isFromDeepLink, setIsFromDeepLink] = useState<boolean>(false)
+  const [medications, setMedications] = useState<MedicationOption[]>([])
+  const [requests, setRequests] = useState<MedicationRequestItem[]>([])
+  const [isPharmacyLoading, setIsPharmacyLoading] = useState(false)
+  const [pharmacyError, setPharmacyError] = useState<string | null>(null)
+
+  const refreshPharmacy = async () => {
+    if (!token) return
+    setIsPharmacyLoading(true)
+    setPharmacyError(null)
+    try {
+      const [meds, reqs] = await Promise.all([getMyMedications(), loadMyRequests()])
+      setMedications(meds)
+      setRequests(reqs)
+    } catch (err: unknown) {
+      setPharmacyError(err instanceof Error ? err.message : 'Gagal memuat data obat')
+    } finally {
+      setIsPharmacyLoading(false)
+    }
+  }
+
+  const isPharmacyTab = activeTab === 'REQUEST_MED' || activeTab === 'MY_REQUESTS'
+  const token = authState === 'AUTHED'
+
+  useEffect(() => {
+    if (isPharmacyTab) {
+      void refreshPharmacy()
+    }
+  }, [isPharmacyTab])
 
   const handleIncomingUrl = (url: string | null) => {
     if (!url) return
@@ -52,54 +104,63 @@ export default function App() {
     }
   }, [])
 
+  if (authState !== 'AUTHED') {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        {authState === 'ANONYMOUS' ? (
+          <AuthScreen
+            onAuthenticated={() => {
+              setAuthState('AUTHED')
+              void refreshPharmacy()
+            }}
+          />
+        ) : null}
+        <StatusBar style="dark" />
+      </SafeAreaView>
+    )
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Top Navigation Switcher for Demo & Multi-screen Support */}
-      <View style={styles.topTabBar}>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'CONFIRM' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('CONFIRM')}
+      {/* Perangkat sering dipakai bersama di ruang tunggu puskesmas, jadi ada jalan
+          keluar eksplisit — tokenPasien tidak boleh tertinggal untuk orang berikutnya. */}
+      <View style={styles.headerBar}>
+        <Text style={styles.headerText}>CareLoop</Text>
+        <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Layar Jadwal Obat"
+          accessibilityLabel="Keluar"
+          onPress={() => {
+            void clearStoredToken().then(() => setAuthState('ANONYMOUS'))
+          }}
         >
-          <Text
-            style={[styles.tabButtonText, activeTab === 'CONFIRM' && styles.tabButtonTextActive]}
-          >
-            💊 Jadwal Obat
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'EMERGENCY' && styles.tabButtonEmergencyActive,
-          ]}
-          onPress={() => setActiveTab('EMERGENCY')}
-          accessibilityRole="button"
-          accessibilityLabel="Layar Darurat Medis 112"
-        >
-          <Text
-            style={[
-              styles.tabButtonText,
-              activeTab === 'EMERGENCY' && styles.tabButtonTextEmergencyActive,
-            ]}
-          >
-            🚨 Darurat (112)
-          </Text>
-        </TouchableOpacity>
+          <Text style={styles.headerAction}>Keluar</Text>
+        </Pressable>
       </View>
 
-      {/* Konten Layar Aktif */}
+      <TopTabs activeTab={activeTab} onChange={setActiveTab} />
+
       <View style={styles.content}>
         {activeTab === 'CONFIRM' ? (
           <ConfirmScreen
             initialScheduleId={activeScheduleId}
             isFromDeepLink={isFromDeepLink}
           />
-        ) : (
+        ) : activeTab === 'EMERGENCY' ? (
           <EmergencyScreen
             initialEmergencyId={activeEmergencyId}
             isFromDeepLink={isFromDeepLink}
+          />
+        ) : activeTab === 'REQUEST_MED' ? (
+          <RequestMedicationScreen
+            medications={medications}
+            onSubmitted={() => void refreshPharmacy()}
+          />
+        ) : (
+          <MedicationRequestsScreen
+            requests={requests}
+            isLoading={isPharmacyLoading}
+            errorMessage={pharmacyError}
+            onRefresh={() => void refreshPharmacy()}
           />
         )}
       </View>
@@ -112,44 +173,18 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FAFAF9',
-  },
-  topTabBar: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E7E5E4',
-    gap: 10,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: '#F5F5F4',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabButtonActive: {
-    backgroundColor: '#16A34A',
-  },
-  tabButtonEmergencyActive: {
-    backgroundColor: '#DC2626',
-  },
-  tabButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#57534E',
-  },
-  tabButtonTextActive: {
-    color: '#FFFFFF',
-  },
-  tabButtonTextEmergencyActive: {
-    color: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
   },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+  },
+  headerText: { ...typography.h2, color: colors.text },
+  headerAction: { ...typography.label, color: colors.primary },
 })

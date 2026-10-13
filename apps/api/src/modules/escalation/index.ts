@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../../lib/prisma'
 import { invalidTransition, notFound } from '../../lib/errors'
-import { escalationRespondSchema } from '@careloop/shared'
+import { authenticate, requireCareTeamRole, requireRole } from '../../lib/auth'
+import { UserRole, escalationRespondSchema } from '@careloop/shared'
 import { handleEmergencyTimeout } from '../emergency/emergency.service'
 import {
   ACTIVE_ESCALATION_STATUSES,
@@ -28,6 +29,7 @@ import {
   InMemoryEscalationQueueAdapter,
   MockEscalationNotifier,
 } from './timeout.service'
+import { WhatsAppEscalationNotifier } from './escalation.scheduler'
 
 export {
   ACTIVE_ESCALATION_STATUSES,
@@ -89,8 +91,13 @@ const escalationStepsParamsSchema = z.object({
 })
 
 export function registerEscalationRoutes(app: FastifyInstance): void {
-  // GET /v1/escalations/active (docs/API.md §3.6)
-  app.get('/v1/escalations/active', async () => {
+  // GET /v1/escalations/active (docs/API.md §3.6).
+  // Care team saja: run memuat NIK, livingSituation (jalur eskalasi darurat),
+  // dan nomor telepon keluarga yang menerima alert.
+  app.get(
+    '/v1/escalations/active',
+    { preHandler: [authenticate, requireCareTeamRole()] },
+    async () => {
     const activeRuns = await prisma.escalationRun.findMany({
       where: {
         status: { in: ACTIVE_ESCALATION_STATUSES as any },
@@ -114,21 +121,31 @@ export function registerEscalationRoutes(app: FastifyInstance): void {
       orderBy: { startedAt: 'desc' },
     })
 
-    return { data: activeRuns }
-  })
+      return { data: activeRuns }
+    },
+  )
 
   // GET /v1/escalations/:id (docs/API.md §3.6)
-  app.get('/v1/escalations/:id', async (req, reply) => {
+  app.get(
+    '/v1/escalations/:id',
+    { preHandler: [authenticate, requireCareTeamRole()] },
+    async (req, reply) => {
     const params = escalationParamsSchema.parse(req.params)
     const run = await getEscalationRunById(prisma as any, params.id)
     if (!run) {
       throw notFound(`Escalation run ${params.id} tidak ditemukan`)
     }
-    return reply.code(200).send({ data: run })
-  })
+      return reply.code(200).send({ data: run })
+    },
+  )
 
   // POST /v1/escalations/:id/respond (docs/API.md §3.6, AC-7.2)
-  app.post('/v1/escalations/:id/respond', async (req: any, reply: any) => {
+  // Dibuka untuk keluarga (menerima alert lalu bilang "Saya Tangani") dan
+  // care team (nakes yang menangani dari dashboard).
+  app.post(
+    '/v1/escalations/:id/respond',
+    { preHandler: [authenticate, requireRole(UserRole.FAMILY, UserRole.PATIENT, UserRole.NAKES, UserRole.ADMIN)] },
+    async (req: any, reply: any) => {
     const params = escalationParamsSchema.parse(req.params)
     const body = escalationRespondSchema.parse(req.body ?? {})
 
@@ -192,7 +209,10 @@ export function registerEscalationRoutes(app: FastifyInstance): void {
   })
 
   // GET /v1/escalations/:runId/steps (docs/API.md §3.6)
-  app.get('/v1/escalations/:runId/steps', async (req, reply) => {
+  app.get(
+    '/v1/escalations/:runId/steps',
+    { preHandler: [authenticate, requireCareTeamRole()] },
+    async (req, reply) => {
     const params = escalationStepsParamsSchema.parse(req.params)
     const run = await prisma.escalationRun.findUnique({
       where: { id: params.runId },
@@ -207,11 +227,18 @@ export function registerEscalationRoutes(app: FastifyInstance): void {
       throw notFound(`Escalation run ${params.runId} tidak ditemukan`)
     }
 
-    return reply.code(200).send({ data: run.steps })
-  })
+      return reply.code(200).send({ data: run.steps })
+    },
+  )
 
-  // POST /internal/jobs/escalation-timeout (docs/API.md §4)
-  app.post('/internal/jobs/escalation-timeout', async (req: any, reply: any) => {
+  // POST /internal/jobs/escalation-timeout (docs/API.md §4).
+  // Endpoint ini memanggil transisi eskalasi, jadi harus bertoken seperti
+  // endpoint lain — sebelumnya terbuka tanpa autentikasi sehingga siapa pun bisa
+  // memaksa eskalasi pasien. ADMIN/NAKES dipakai worker internal.
+  app.post(
+    '/internal/jobs/escalation-timeout',
+    { preHandler: [authenticate, requireRole(UserRole.NAKES, UserRole.ADMIN)] },
+    async (req: any, reply: any) => {
     const body = z
       .object({
         runId: z.string().uuid(),
@@ -250,7 +277,9 @@ export function registerEscalationRoutes(app: FastifyInstance): void {
 
     const result = await handleEscalationTimeout(
       prisma as any,
-      { notifier: new MockEscalationNotifier() },
+      // Endpoint ini adalah pemicu manual; notifier produksi dipakai supaya alert benar-benar
+      // terkirim saat operator memancing transisi, bukan hanya tercatat sebagai mock.
+      { notifier: new WhatsAppEscalationNotifier() },
       {
         runId: run.id,
         patientId: run.patientId,

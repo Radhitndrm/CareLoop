@@ -53,6 +53,35 @@ erDiagram
     export_jobs ||--o| users : "diminta oleh"
     risk_predictions }o--o| escalation_runs : "bukan relasi"
     chatbot_sessions ||--o{ chatbot_messages : "berisi"
+
+    MEDICATION_REQUEST {
+        uuid id PK
+        uuid patientId FK
+        uuid medicationId FK
+        int requestedQuantity
+        int approvedQuantity
+        enum source
+        enum status
+        enum reasonCode
+        date dueAt
+        string blockedReason
+        bool isSubstituteApproved
+    }
+    DISPENSING_RECORD {
+        uuid id PK
+        uuid requestId FK "unique"
+        uuid pharmacistId FK
+        int quantityDays
+        date nextPickupDate
+    }
+    MEDICATION_REQUEST_EVENT {
+        uuid id PK
+        uuid requestId FK
+        enum fromStatus
+        enum toStatus
+        enum action
+        uuid actorUserId FK
+    }
 ```
 
 > Catatan: `family_contacts` dapat dipandang sebagai relasi pasien–keluarga dengan metadata tier/prioritas. Karena satu `user` bisa jadi keluarga untuk banyak pasien, gunakan model pivot (di bawah) dengan `user_id` nullable saat kontak belum punya akun (hanya nomor HP).
@@ -70,12 +99,20 @@ Akun semua aktor (pasien, keluarga, nakes, admin). Profil spesifik dipisah di ta
 | password_hash | text nullable | Untuk nakes/admin (pasien pakai OTP WA) |
 | full_name | varchar(120) | |
 | role | enum `PATIENT` `FAMILY` `NAKES` `ADMIN` | |
+| nakes_role | enum nullable `DOKTER` `PERAWAT` `BIDAN` `KADER` `LAINNYA` | Hanya untuk role `NAKES` — kewenangan klinis |
 | language | varchar(10) default `id` | |
 | timezone | varchar(32) default `Asia/Jakarta` | ADR-007 |
 | is_active | bool default true | |
 | is_verified | bool default false | Verifikasi OTP |
 | consent_pdp_at | timestamptz nullable | Persetujuan data (UU PDP) |
 | created_at / updated_at | timestamptz | |
+
+> **`nakes_role` nullable tanpa default.** Kolom ini menentukan siapa yang boleh menyetujui
+> resep dan menetapkan ambang detak jantung, jadi tidak diberi nilai default di database —
+> peran klinis hanya terisi bila admin memilihnya saat membuat akun. Akun non-`NAKES`
+> membiarkannya kosong. (Kolom ini sempat diberi `DEFAULT 'PERAWAT'` dan sudah dikoreksi lewat
+> migrasi `fix_nakes_role_default`, karena default tersebut ikut menempel ke akun pasien,
+> keluarga, dan admin.)
 
 ### 3.2 `patients`
 Profil klinis & demografi pasien (ekstensi `users.role=PATIENT`).
@@ -89,6 +126,11 @@ Profil klinis & demografi pasien (ekstensi `users.role=PATIENT`).
 | address | text nullable | |
 | district_code | varchar(10) | Kode kelurahan/kecamatan untuk filter wilayah |
 | city / province | varchar(80) | |
+| status | enum `ONBOARDING` `ACTIVE` `INACTIVE` `BLOCKED` default `ONBOARDING` | **Hanya `ACTIVE` boleh diproses scheduler.** Status lain tidak menerima reminder, konfirmasi, maupun eskalasi |
+| primary_puskesma_id | uuid nullable FK → puskesmas.id `ON DELETE SET NULL` | Puskesmas penanggung jawab utama. Sumber kebenaran cakupan pasien |
+| activated_at | timestamptz nullable | Waktu status naik ke `ACTIVE` |
+| activated_by_id | text nullable | User yang mengaktifkan (dokter/bidan/admin) |
+| deactivated_reason | text nullable | Alasan saat status turun ke `INACTIVE`/`BLOCKED` |
 | living_situation | enum `ALONE` `WITH_FAMILY` `FAR_FROM_FAMILY` `OTHER` | Kunci jalur eskalasi nakes |
 | has_nearby_family | bool default true | Fast-track eskalasi nakes |
 | emergency_preference | enum `FAMILY_FIRST` `NAKES_FIRST` | Urutan eskalasi darurat |
@@ -101,7 +143,44 @@ Profil klinis & demografi pasien (ekstensi `users.role=PATIENT`).
 | last_location_at | timestamptz nullable | |
 | risk_score | int nullable | Cache skor risiko (job harian) |
 | risk_level | enum nullable `LOW` `MEDIUM` `HIGH` | |
+| hr_min_bpm | int nullable | Ambang bawah detak jantung individual; NULL = pakai `ANOMALY_HR_MIN` |
+| hr_max_bpm | int nullable | Ambang atas; NULL = pakai `ANOMALY_HR_MAX` |
 | created_at / updated_at | timestamptz | |
+
+> `hr_min_bpm` / `hr_max_bpm` ditetapkan dokter atau bidan. Sebelumnya ambang ini dititipkan
+> sebagai teks bebas di `health_conditions` (mis. `"max_hr:130"`) lalu diparse regex; format
+> bebas tidak bisa diaudit maupun dibedakan mana yang disahkan dokter.
+
+#### Prasyarat aktivasi (`status = 'ACTIVE'`)
+
+Status naik hanya lewat `POST /v1/patients/:id/activate`, dan hanya bila seluruh
+prasyarat berikut terpenuhi. Checklist dihitung ulang di server pada setiap pemanggilan —
+UI hanya menampilkan, tidak memutuskan (guardrail flow §3).
+
+| Prasyarat | Sumber data |
+|---|---|
+| Puskesmas utama ditunjuk dan aktif | `primary_puskesma_id` + `puskesmas.is_active` |
+| Persetujuan PDP tercatat | `users.consent_pdp_at` |
+| Persetujuan berbagi dengan nakes | `consent_share_with_nakes` |
+| Nomor WhatsApp terverifikasi | `users.is_verified` |
+| Data minimum lengkap | nama, nomor, tanggal lahir, gender, `district_code`, `health_conditions[]` |
+| Minimal satu tujuan eskalasi | `family_contacts` atau `nakes_contacts` yang `is_active` |
+| Minimal satu resep disetujui | `medications.status = 'APPROVED'` |
+| Minimal satu jadwal aktif | `schedules.is_active AND schedules.status = 'APPROVED'` |
+
+Keputusan aktivasi hanya boleh diambil `DOKTER`, `BIDAN`, atau `ADMIN`. Perawat dan kader
+boleh melengkapi data dan membuat draft resep, tetapi tidak boleh menaikkan status —
+itu keputusan klinis. `PATCH /v1/patients/:id/status` menolak tujuan `ACTIVE` supaya
+checklist tidak bisa dilewati.
+
+Transisi yang sah:
+
+```text
+ONBOARDING → ACTIVE | INACTIVE | BLOCKED
+ACTIVE     → INACTIVE | BLOCKED
+INACTIVE   → ONBOARDING | ACTIVE | BLOCKED
+BLOCKED    → ONBOARDING | INACTIVE
+```
 
 ### 3.3 `puskesmas` (dan `facilities`)
 Faskes & puskesmas tempat pasien terdaftar / lokasi nakes.
@@ -115,7 +194,10 @@ Faskes & puskesmas tempat pasien terdaftar / lokasi nakes.
 | address | text | |
 | phone | varchar(20) | |
 | lat / lng | double precision | |
-| is_active | bool | |
+| is_active | bool | Nonaktif = tidak boleh dipilih untuk pasien/staf baru |
+
+`patients.primary_puskesma_id` menunjuk ke tabel ini; kolom dibiarkan nullable supaya
+puskesmas yang dinonaktifkan tidak cascade menghapus riwayat pasien.
 
 ### 3.4 `nakes_contacts`
 Tenaga kesehatan/kader yang menangani pasien (jalur eskalasi tier 3).
@@ -148,6 +230,9 @@ Obat yang dikonsumsi pasien.
 | is_active | bool | |
 | started_at | date | |
 | ended_at | date nullable | |
+| status | enum `DRAFT` `APPROVED` `REJECTED` | Persetujuan klinis — hanya `APPROVED` yang boleh berjalan |
+| approved_by_id | uuid nullable FK → users | Dokter/bidan yang menyetujui |
+| approved_at | timestamptz nullable | |
 | created_at / updated_at | timestamptz | |
 
 ### 3.6 `schedules`
@@ -166,7 +251,26 @@ Jadwal minum obat per pasien–obat. Recurrence sederhana (tidak full cron).
 | end_date | date nullable | |
 | time_window_minutes | int default 30 | Jendela konfirmasi (waitWindow untuk eskalasi) |
 | is_active | bool | |
+| status | enum `DRAFT` `APPROVED` `REJECTED` | Mengikuti status obat induknya |
+| approved_by_id | uuid nullable FK → users | |
+| approved_at | timestamptz nullable | |
 | created_at / updated_at | timestamptz | |
+
+### 3.6b Persetujuan klinis (`medications.status` & `schedules.status`)
+
+`DRAFT` = resep sudah ditulis perawat/bidan tetapi **belum disahkan dokter**. Status ini
+menahan seluruh efek: worker reminder melewati jadwal yang belum `APPROVED`, dan
+`POST /v1/compliance/confirm` menolak dengan `422`. `@default(DRAFT)` mengastikan tidak ada
+jalur yang membuat resep aktif tanpa persetujuan.
+
+Obat dan jadwalnya diperbarui bersama dalam satu operasi saat dokter memutuskan, supaya
+tidak ada jadwal yang tertinggal `DRAFT` sementara obatnya sudah aktif.
+
+Kolom `approved_by_id` + `approved_at` menyimpan siapa dan kapan keputusannya diambil —
+ini jejak audit yang membaca "siapa yang menyetujui dosis ini", bukan sekadar "obat aktif".
+
+Migrasi yang menambah kolom ini juga me-`UPDATE` baris lama ke `APPROVED` agar eskalasi
+pasien lama tidak ikut berhenti.
 
 ### 3.7 `medication_stocks`
 Stok untuk estimasi refill (fitur 6).
@@ -409,6 +513,22 @@ Log aktivitas sensitif (lihat [SECURITY.md](SECURITY.md#audit-log)).
 | meta | jsonb nullable | Detail tidak sensitif |
 | created_at | timestamptz | |
 
+#### Status staf (`users.staff_status`)
+
+Hanya relevan untuk role `NAKES`; kolom dibiarkan nullable karena akun pasien dan
+keluarga tidak punya konsep status staf. Kolom ini yang menentukan kelayakan login
+—`users.is_active` selalu disinkronkan darinya oleh service admin.
+
+| Status | Arti | Boleh login |
+|---|---|---|
+| `INVITED` | Admin sudah membuat akun, staf belum mengaktifkan lewat kode sekali pakai | ❌ |
+| `ACTIVE` | Akun dipakai | ✅ |
+| `SUSPENDED` | Cuti atau dalam pemeriksaan | ❌ |
+| `DEACTIVATED` | Berhenti/pindah unit (final) | ❌ |
+
+Kolom terkait: `activation_code_hash` (bcrypt hash kode undangan, dihapus setelah
+ditukar), `activation_code_expires_at`, `activated_at`.
+
 ### 3.21 `nakes_assignments`
 Relasi nakes ↔ puskesmas/wilayah (scope dashboard).
 
@@ -420,6 +540,78 @@ Relasi nakes ↔ puskesmas/wilayah (scope dashboard).
 | district_code | varchar(10) nullable | Scope wilayah alternatif |
 | scope_type | enum `PUSKESMAS` `DISTRICT` `ALL` | |
 | is_active | bool | |
+| ended_at | timestamptz nullable | Terisi saat penugasan ditutup |
+| assigned_by_id | text nullable | Admin yang memberi penugasan |
+| note | text nullable | |
+
+Baris tidak pernah dihapus: penugasan ditutup dengan `is_active = false` + `ended_at`
+terisi supaya pertanyaan "pasien ini pernah dipegang siapa" masih bisa dijawab. Status
+staf non-`ACTIVE` menutup **seluruh** penugasan aktif sekaligus.
+
+### 3.22 `medication_requests`
+Permintaan obat yang menunggu / sedang disiapkan farmasi (docs/API.md §3.6).
+Semua kuantitas dalam satuan **hari**.
+
+| Kolom | Tipe | Deskripsi |
+|---|---|---|
+| id | uuid PK | |
+| patient_id | uuid FK → patients | |
+| medication_id | uuid FK → medications | |
+| requested_quantity | int | Jumlah hari yang diminta pasien |
+| approved_quantity | int nullable | Jumlah yang disetujui dokter; boleh berbeda dari yang diminta |
+| source | enum `ROUTINE` `PATIENT_REQUEST` | `ROUTINE` dibuat scheduler dari resep yang sudah disetujui |
+| status | enum `MedicationRequestStatus` | Lihat catatan di bawah |
+| reason_code | enum nullable | `EARLY_PICKUP` `MEDICATION_LOST` `DAMAGED` `EXTRA` `OTHER` |
+| reason_notes | text nullable | Catatan pasien |
+| doctor_id | uuid nullable FK → users | Dokter/bidan yang memutuskan |
+| doctor_decision_note | text nullable | |
+| decided_at | timestamptz nullable | |
+| due_at | date | Tanggal jatuh tempo pengambilan |
+| blocked_reason | text nullable | Alasan penolakan / stok kosong / penggantian |
+| substitute_name | varchar(120) nullable | Nama obat pengganti |
+| is_substitute_approved | bool default false | Hanya dokter yang boleh mengubahnya |
+| created_at / updated_at | timestamptz | |
+
+> **`OVERDUE` bukan status.** Keterlambatan dihitung dari `due_at` dibanding hari
+> ini, selama status masih `QUEUED`/`PREPARING`/`READY` — inilah yang membuat
+> field `isOverdue` pada API. Kalau disimpan sebagai status, apotek akan
+> kehilangan informasi apakah obatnya sudah disiapkan atau belum saat pasien
+> datang terlambat.
+
+Tambahan pada `medications`:
+
+| Kolom | Tipe | Deskripsi |
+|---|---|---|
+| days_supply | int nullable | Jatah hari per pengambilan, diisi dokter saat menyetujui resep |
+| next_pickup_at | date nullable | Tanggal ambil berikutnya; NULL = belum pernah diambil, jadi scheduler tidak membuat request rutin |
+
+### 3.23 `dispensing_records`
+Satu baris per penyerahan obat. Satu request = satu penyerahan.
+
+| Kolom | Tipe | Deskripsi |
+|---|---|---|
+| id | uuid PK | |
+| request_id | uuid **unique** FK → medication_requests | Mencegah obat diserahkan dua kali |
+| pharmacist_id | uuid FK → users | Petugas farmasi yang menyerahkan |
+| quantity_days | int | Jumlah hari yang diserahkan |
+| dispensed_at | timestamptz | |
+| next_pickup_date | date | Dihitung dari `dispensed_at + quantity_days` |
+| created_at | timestamptz | |
+
+### 3.24 `medication_request_events`
+Audit trail append-only untuk setiap perubahan status permintaan obat.
+
+| Kolom | Tipe | Deskripsi |
+|---|---|---|
+| id | uuid PK | |
+| request_id | uuid FK → medication_requests | |
+| from_status | enum nullable | NULL untuk baris `CREATED` |
+| to_status | enum | |
+| action | enum `MedicationRequestAction` | |
+| actor_user_id | uuid nullable FK → users | NULL bila oleh sistem/scheduler |
+| actor_role | enum nullable | |
+| note | text nullable | |
+| created_at | timestamptz | |
 
 ---
 
@@ -432,6 +624,10 @@ Relasi nakes ↔ puskesmas/wilayah (scope dashboard).
 | family_contacts N:1 users | Keluarga bisa punya akun atau hanya nomor |
 | patients 1:N nakes_contacts | Multi nakes; `is_primary` menentukan jalur utama |
 | patients 1:N medications / schedules / compliance_logs / vital_signs | |
+| medications 1:N medication_requests | Satu obat bisa punya beberapa request, tapi hanya satu yang aktif |
+| patients 1:N medication_requests | |
+| medication_requests 0:1 dispensing_records | UNIQUE (request_id) — obat tidak bisa diserahkan dua kali |
+| medication_requests 1:N medication_request_events | Audit trail perubahan status |
 | schedules 1:N compliance_logs | Setiap schedule punya banyak log harian |
 | patients 1:N escalation_runs | Satu run aktif per (patient, context) — **unique partial index** |
 | escalation_runs 1:N escalation_steps | |
@@ -500,7 +696,10 @@ Dedup event smartwatch memakai unique biasa `VitalSign(patientId, source, record
 | Enum | Nilai |
 |---|---|
 | UserRole | PATIENT, FAMILY, NAKES, ADMIN |
+| PatientStatus | ONBOARDING, ACTIVE, INACTIVE, BLOCKED |
 | LivingSituation | ALONE, WITH_FAMILY, FAR_FROM_FAMILY, OTHER |
+| PatientStatus | ONBOARDING, ACTIVE, INACTIVE, BLOCKED |
+| StaffStatus | INVITED, ACTIVE, SUSPENDED, DEACTIVATED |
 | ComplianceStatus | PENDING, CONFIRMED, CONFIRMED_LATE, MISSED, TUNDA |
 | VitalSource | GOOGLE_FIT, HEALTHKIT, MOCK |
 | EmergencyStatus | PENDING_PATIENT_CONFIRM, ESCALATING, RESOLVED_SAFE, HANDLED, TIMED_OUT |
@@ -517,7 +716,12 @@ Dedup event smartwatch memakai unique biasa `VitalSign(patientId, source, record
 | EmergencyPreference | FAMILY_FIRST, NAKES_FIRST |
 | Gender | M, F |
 | Relationship | ANAK, PASANGAN, SAUDARA, CUCU, TETANGGA, KEPONAKAN, LAINNYA |
-| NakesRole | DOKTER, PERAWAT, BIDAN, KADER, LAINNYA |
+| NakesRole | DOKTER, PERAWAT, BIDAN, KADER, FARMASI, LAINNYA |
+| MedicationStatus | DRAFT, APPROVED, REJECTED |
+| MedicationRequestSource | ROUTINE, PATIENT_REQUEST |
+| MedicationRequestStatus | PENDING_DOCTOR, QUEUED, PREPARING, READY, DISPENSED, REJECTED, OUT_OF_STOCK, SUBSTITUTED |
+| MedicationRequestReason | EARLY_PICKUP, MEDICATION_LOST, DAMAGED, EXTRA, OTHER |
+| MedicationRequestAction | CREATED, APPROVED, REJECTED, START_PREPARING, MARK_READY, DISPENSED, MARK_OUT_OF_STOCK, MARK_SUBSTITUTED, RETURNED_TO_QUEUE |
 | NakesScopeType | PUSKESMAS, DISTRICT, ALL |
 | MedicalForm | TABLET, KAPSUL, SIRUP, INJEKSI, LAINNYA |
 | NotificationStatus | PENDING, SENT, DELIVERED, READ, FAILED, RETRYING |

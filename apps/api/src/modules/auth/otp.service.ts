@@ -3,6 +3,7 @@
 // restart dan tidak dibagi antar replika. Pemindahan ke Redis dilakukan di CL-401.
 import type { AuthSession, AuthUserClaims, OtpChallenge, UserRole } from '@careloop/shared'
 import { rateLimited, unauthorized } from '../../lib/errors'
+import { getEnv } from '../../lib/env'
 import type { AuthUserRecord } from './auth.service'
 
 /** Hanya pasien & keluarga yang login lewat OTP. Nakes/admin memakai kata sandi (CL-006). */
@@ -63,6 +64,15 @@ export interface OtpDeps {
   findUser(phone: string): Promise<AuthUserRecord | null>
   signToken(claims: AuthUserClaims, expiresInSec: number): string
   randomCode(): string
+  /**
+   * Tandai nomor sudah terverifikasi. Opsional agar unit test lama tidak harus
+   * menyediakan callback.
+   *
+   * WAJIB ada di produksi: tanpa ini `users.is_verified` tidak pernah naik, dan karena
+   * itu prasyarat aktivasi `VERIFIED` tidak akan pernah terpenuhi — pasien yang OTP-nya
+   * berhasil tidak akan pernah bisa diaktifkan.
+   */
+  markVerified?(userId: string): Promise<void>
 }
 
 export function generateOtpCode(): string {
@@ -135,6 +145,12 @@ export async function verifyOtp(
   // Kode sekali pakai: hapus sebelum token diterbitkan.
   deps.store.delete(input.phone)
 
+  // Verifikasi nomor adalah satu-satunya jalan menaikkan `is_verified`. Sengaja
+  // dilakukan setelah kode dicocokkan, bukan saat kode diminta.
+  if (!user.isVerified) {
+    await deps.markVerified?.(user.id)
+  }
+
   const claims: AuthUserClaims = { sub: user.id, role: user.role }
 
   return {
@@ -144,7 +160,83 @@ export async function verifyOtp(
       id: user.id,
       role: user.role,
       fullName: user.fullName,
-      isVerified: user.isVerified,
+      isVerified: true,
     },
+  }
+}
+
+// ---------------------------------------------------------------- store bersama
+
+/**
+ * Satu store OTP untuk seluruh proses, bukan satu per route.
+ *
+ * Sebelumnya `POST /v1/auth/otp/request` dan alur verifikasi pasien sama-sama
+ * membuat `InMemoryOtpStore` sendiri. Kalau registration mengirim instruksi lewat
+ * jalur berbeda, keduanya akan menerbitkan kode yang saling menimpa dan cooldown
+ * tidak berlaku di sana — pasien bisa Asking kode berulang tanpa jeda.
+ */
+let sharedStore: OtpStore = new InMemoryOtpStore()
+
+export function getOtpStore(): OtpStore {
+  return sharedStore
+}
+
+/** Hanya untuk test: mengganti store mengisolasi state antar suite. */
+export function setOtpStore(store: OtpStore): void {
+  sharedStore = store
+}
+
+/** Konfigurasi OTP dibaca dari env di satu tempat (docs/API.md §2). */
+export function getOtpConfig(): OtpConfig {
+  try {
+    const env = getEnv()
+    return {
+      ttlSec: env.OTP_TTL_SEC,
+      cooldownSec: env.OTP_RESEND_COOLDOWN_SEC,
+      maxAttempts: env.OTP_MAX_ATTEMPTS,
+      mockCode: env.PROVIDER_MODE === 'mock' ? env.OTP_MOCK_CODE : null,
+    }
+  } catch {
+    // Di luar konteks server penuh (unit test), pakai default yang sama dengan env.
+    return { ttlSec: 300, cooldownSec: 30, maxAttempts: 5, mockCode: '123456' }
+  }
+}
+
+/**
+ * Minta kode OTP untuk nomor yang **sudah terdaftar** sebagai pasien.
+ *
+ * Berbeda dengan `requestOtp` yang sengaja tidak membocorkan keberadaan nomor, jalur ini
+ * hanya dipanggil setelah operator sudah punya akses ke record pasien, jadi tidak ada
+ * risiko enumerasi. Cooldown-nya tetap ditegakkan supaya form pendaftaran tidak bisa
+ * dipakai membanjiri WhatsApp pasien.
+ */
+export async function requestPatientOtp(
+  input: { phone: string },
+  config: OtpConfig,
+  deps: { store: OtpStore; now: () => number },
+): Promise<OtpChallenge> {
+  const nowMs = deps.now()
+  const existing = deps.store.get(input.phone)
+
+  if (existing) {
+    const elapsedSec = Math.floor((nowMs - existing.issuedAtMs) / 1000)
+    const remaining = config.cooldownSec - elapsedSec
+    if (remaining > 0) {
+      throw rateLimited(`Tunggu ${remaining} detik sebelum meminta kode baru`, {
+        retryAfterSec: remaining,
+      })
+    }
+  }
+
+  deps.store.set(input.phone, {
+    code: config.mockCode ?? generateOtpCode(),
+    expiresAtMs: nowMs + config.ttlSec * 1000,
+    issuedAtMs: nowMs,
+    attemptsLeft: config.maxAttempts,
+  })
+
+  return {
+    otpExpiresAt: new Date(nowMs + config.ttlSec * 1000).toISOString(),
+    retryAfterSec: config.cooldownSec,
   }
 }

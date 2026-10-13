@@ -13,8 +13,21 @@ describe('Emergency Routes (CL-204)', () => {
     process.env.JWT_SECRET ??= 'test-secret-minimal-32-karakter-abcdefg'
 
     const { buildApp } = await import('../../app')
-    app = await buildApp({ logger: false })
+    app = await buildApp({ logger: false, enableWs: false })
     vi.spyOn(prisma, '$transaction').mockImplementation(async (cb: any) => cb(prisma))
+  })
+
+  // Semua route darurat kini bertoken. Nakes dipakai sebagai aktor default;
+  // kasus tanpa token & antar-role diuji di bagian RBAC di bawah.
+  const nakesToken = (nakesRole = 'PERAWAT') =>
+    app.jwt.sign({
+      sub: '22222222-2222-4222-8222-222222222222',
+      role: 'NAKES',
+      nakesRole,
+    } as any)
+
+  const authHeaders = (nakesRole?: string) => ({
+    authorization: `Bearer ${nakesToken(nakesRole)}`,
   })
 
   describe('GET /v1/emergencies/active', () => {
@@ -44,6 +57,7 @@ describe('Emergency Routes (CL-204)', () => {
       const res = await app.inject({
         method: 'GET',
         url: '/v1/emergencies/active',
+        headers: authHeaders(),
       })
 
       expect(res.statusCode).toBe(200)
@@ -80,6 +94,7 @@ describe('Emergency Routes (CL-204)', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/v1/emergencies/${dummyEmergencyId}`,
+        headers: authHeaders(),
       })
 
       expect(res.statusCode).toBe(200)
@@ -95,6 +110,7 @@ describe('Emergency Routes (CL-204)', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/v1/emergencies/${dummyEmergencyId}`,
+        headers: authHeaders(),
       })
 
       expect(res.statusCode).toBe(404)
@@ -145,6 +161,7 @@ describe('Emergency Routes (CL-204)', () => {
       const res = await app.inject({
         method: 'POST',
         url: `/v1/emergencies/${dummyEmergencyId}/patient-response`,
+        headers: authHeaders(),
         payload: {
           response: 'SAFE',
           notes: 'Saya aman',
@@ -205,6 +222,7 @@ describe('Emergency Routes (CL-204)', () => {
       const res = await app.inject({
         method: 'POST',
         url: `/v1/emergencies/${dummyEmergencyId}/respond`,
+        headers: authHeaders(),
         payload: {
           response: 'NEED_HELP',
         },
@@ -221,6 +239,7 @@ describe('Emergency Routes (CL-204)', () => {
       const res = await app.inject({
         method: 'POST',
         url: `/v1/emergencies/${dummyEmergencyId}/respond`,
+        headers: authHeaders(),
         payload: {
           response: 'INVALID_STATUS',
         },
@@ -283,6 +302,7 @@ describe('Emergency Routes (CL-204)', () => {
       const res = await app.inject({
         method: 'POST',
         url: `/v1/emergencies/${dummyEmergencyId}/timeout`,
+        headers: authHeaders(),
         payload: {
           notes: 'Uji timeout via HTTP',
         },
@@ -303,6 +323,7 @@ describe('Emergency Routes (CL-204)', () => {
       const res = await app.inject({
         method: 'POST',
         url: '/v1/emergencies/non-uuid-id/timeout',
+        headers: authHeaders(),
       })
 
       expect(res.statusCode).toBe(400)
@@ -314,6 +335,7 @@ describe('Emergency Routes (CL-204)', () => {
       const res = await app.inject({
         method: 'POST',
         url: `/v1/emergencies/${dummyEmergencyId}/timeout`,
+        headers: authHeaders(),
       })
 
       expect(res.statusCode).toBe(404)
@@ -370,6 +392,7 @@ describe('Emergency Routes (CL-204)', () => {
       const res = await app.inject({
         method: 'POST',
         url: '/internal/jobs/escalation-timeout',
+        headers: authHeaders(),
         payload: {
           runId,
           currentState: 'WAITING_PATIENT',
@@ -393,6 +416,7 @@ describe('Emergency Routes (CL-204)', () => {
       const res = await app.inject({
         method: 'POST',
         url: '/internal/jobs/escalation-timeout',
+        headers: authHeaders(),
         payload: {
           runId,
           currentState: 'WAITING_PATIENT',

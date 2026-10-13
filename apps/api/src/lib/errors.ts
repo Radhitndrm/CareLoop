@@ -153,9 +153,14 @@ export function normalizeError(err: unknown): NormalizedError {
     return normalized(badRequest('Input tidak valid'))
   }
 
-  // State machine eskalasi melempar InvalidTransitionError sendiri (modules/escalation).
-  // Dicocokkan lewat name agar lib/ tidak bergantung pada modul domain.
+  // State machine eskalasi & farmasi melempar InvalidTransitionError sendiri
+  // (modules/escalation, modules/pharmacy). Dicocokkan lewat name agar lib/
+  // tidak bergantung pada modul domain.
   if (err instanceof Error && err.name === 'InvalidTransitionError') {
+    return normalized(invalidTransition(err.message))
+  }
+
+  if (err instanceof Error && err.name === 'InvalidPharmacyTransitionError') {
     return normalized(invalidTransition(err.message))
   }
 

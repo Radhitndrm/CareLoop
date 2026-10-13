@@ -46,13 +46,22 @@ async function seedFixture(prisma: PrismaClient, voiceEnabled = false): Promise<
     },
   })
   await prisma.patient.create({
-    data: { id: userId, voiceEnabled, emergencyPreference: 'FAMILY_FIRST' },
+    data: {
+      id: userId,
+      voiceEnabled,
+      emergencyPreference: 'FAMILY_FIRST',
+      // Pasien harus ACTIVE supaya worker mengizinkan reminder (guardrail flow §2).
+      status: 'ACTIVE',
+    },
   })
   const medication = await prisma.medication.create({
     data: {
       patientId: userId,
       name: 'Metformin 500mg',
       startedAt: new Date('2026-01-01T00:00:00.000Z'),
+      // Sudah disahkan dokter agar reminder boleh dikirim (docs/API.md §3.2).
+      status: 'APPROVED',
+      isActive: true,
     },
   })
   const schedule = await prisma.schedule.create({
@@ -63,6 +72,8 @@ async function seedFixture(prisma: PrismaClient, voiceEnabled = false): Promise<
       doseQty: '1 tablet',
       startDate: new Date('2026-01-01T00:00:00.000Z'),
       timeWindowMinutes: 30,
+      status: 'APPROVED',
+      isActive: true,
     },
   })
 

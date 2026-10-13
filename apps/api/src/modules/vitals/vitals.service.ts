@@ -78,38 +78,24 @@ export function sanitizeRawPayload(
 }
 
 /**
- * Ekstrak threshold custom pasien dari profil kondisi kesehatan (AN-7).
- * Contoh format di healthConditions: 'maxHr:130', 'min_hr:45', 'hr_max:140'.
+ * Ambang detak jantung individual pasien, ditetapkan dokter (docs/API.md §3.4).
+ *
+ * Sebelumnya ambang ini disisipkan sebagai string di `healthConditions`
+ * (mis. 'max_hr:130') lalu diparse regex. Format bebas seperti itu tidak bisa
+ * dibedakan mana yang disahkan dokter, jadi digantikan kolom eksplisit
+ * `Patient.hrMinBpm` / `Patient.hrMaxBpm`. Kolom kosong = pakai default sistem.
  */
-export function extractPatientThresholds(
-  healthConditions?: string[] | null
-): Partial<AnomalyRuleConfig> {
-  if (!healthConditions || !Array.isArray(healthConditions)) return {}
-
+export function patientHrThresholds(thresholds?: {
+  hrMinBpm?: number | null
+  hrMaxBpm?: number | null
+}): Partial<AnomalyRuleConfig> {
   const config: Partial<AnomalyRuleConfig> = {}
-
-  for (const condition of healthConditions) {
-    if (typeof condition !== 'string') continue
-
-    // Cocokkan pola seperti maxHr:130, max_hr:130, hr_max:130
-    const maxMatch = condition.match(/(?:max_?hr|hr_?max)[:=](\d+)/i)
-    if (maxMatch && maxMatch[1]) {
-      config.maxHr = parseInt(maxMatch[1], 10)
-    }
-
-    // Cocokkan pola seperti minHr:45, min_hr:45, hr_min:45
-    const minMatch = condition.match(/(?:min_?hr|hr_?min)[:=](\d+)/i)
-    if (minMatch && minMatch[1]) {
-      config.minHr = parseInt(minMatch[1], 10)
-    }
-
-    // Cocokkan pola seperti windowSec:60, window_sec:60
-    const windowMatch = condition.match(/window_?sec[:=](\d+)/i)
-    if (windowMatch && windowMatch[1]) {
-      config.windowMs = parseInt(windowMatch[1], 10) * 1000
-    }
+  if (typeof thresholds?.hrMinBpm === 'number' && Number.isFinite(thresholds.hrMinBpm)) {
+    config.minHr = thresholds.hrMinBpm
   }
-
+  if (typeof thresholds?.hrMaxBpm === 'number' && Number.isFinite(thresholds.hrMaxBpm)) {
+    config.maxHr = thresholds.hrMaxBpm
+  }
   return config
 }
 
@@ -123,19 +109,20 @@ export async function evaluatePatientVitalsAnomaly(
     patientId: string
     currentReading?: { recordedAt: Date; hrBpm?: number | null }
     ruleConfig?: Partial<AnomalyRuleConfig>
-    healthConditions?: string[] | null
+    /** Ambang per pasien dari Patient.hrMinBpm / hrMaxBpm (null = default sistem). */
+    hrThresholds?: { hrMinBpm?: number | null; hrMaxBpm?: number | null }
   }
 ): Promise<AnomalyResult> {
   if (
     params.currentReading?.hrBpm === undefined ||
-    params.currentReading?.hrBpm === null ||
+    params.currentReading.hrBpm === null ||
     !Number.isFinite(params.currentReading.hrBpm)
   ) {
     return { isAnomalous: false }
   }
 
   const baseConfig = anomalyRuleConfig()
-  const patientConfig = extractPatientThresholds(params.healthConditions)
+  const patientConfig = patientHrThresholds(params.hrThresholds)
   const effectiveConfig: AnomalyRuleConfig = {
     ...baseConfig,
     ...patientConfig,
@@ -203,7 +190,12 @@ export async function ingestVitalSign(
   // 1. Periksa keberadaan pasien dan status smartwatchEnabled (AN-5)
   const patient = await prisma.patient.findUnique({
     where: { id: input.patientId },
-    select: { id: true, smartwatchEnabled: true, healthConditions: true },
+    select: {
+      id: true,
+      smartwatchEnabled: true,
+      hrMinBpm: true,
+      hrMaxBpm: true,
+    },
   })
 
   if (!patient) {
@@ -249,7 +241,7 @@ export async function ingestVitalSign(
         hrBpm: input.hrBpm,
       },
       ruleConfig: options?.customRuleConfig,
-      healthConditions: patient.healthConditions,
+      hrThresholds: { hrMinBpm: patient.hrMinBpm, hrMaxBpm: patient.hrMaxBpm },
     })
 
     isAnomalous = anomalyResult.isAnomalous

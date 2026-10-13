@@ -35,6 +35,23 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
     }
   })
 
+  // Route eskalasi kini bertoken (sebelumnya terbuka tanpa autentikasi).
+  const nakesToken = (nakesRole = 'PERAWAT') =>
+    app.jwt.sign({
+      sub: '22222222-2222-4222-8222-222222222222',
+      role: 'NAKES',
+      nakesRole,
+    } as any)
+
+  const authHeaders = (nakesRole?: string) => ({
+    authorization: `Bearer ${nakesToken(nakesRole)}`,
+  })
+
+  // Respon eskalasi datang dari keluarga/nakes yang menerima alert.
+  const familyHeaders = () => ({
+    authorization: `Bearer ${app.jwt.sign({ sub: '33333333-3333-4333-8333-333333333333', role: 'FAMILY' } as any)}`,
+  })
+
   describe('GET /v1/escalations/active', () => {
     it('mengembalikan daftar run eskalasi aktif dengan status 200', async () => {
       vi.spyOn(prisma.escalationRun, 'findMany').mockResolvedValue([
@@ -63,6 +80,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'GET',
         url: '/v1/escalations/active',
+        headers: authHeaders(),
       })
 
       expect(res.statusCode).toBe(200)
@@ -104,6 +122,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/v1/escalations/${dummyRunId}`,
+        headers: authHeaders(),
       })
 
       expect(res.statusCode).toBe(200)
@@ -120,6 +139,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/v1/escalations/${dummyRunId}`,
+        headers: authHeaders(),
       })
 
       expect(res.statusCode).toBe(404)
@@ -131,6 +151,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'GET',
         url: '/v1/escalations/not-a-valid-uuid',
+        headers: authHeaders(),
       })
 
       expect(res.statusCode).toBe(400)
@@ -178,6 +199,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'POST',
         url: `/v1/escalations/${dummyRunId}/respond`,
+        headers: familyHeaders(),
         payload: {
           response: 'HANDLE',
           note: 'Saya akan ke rumah Bu Ratna sekarang',
@@ -210,6 +232,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'POST',
         url: `/v1/escalations/${dummyRunId}/respond`,
+        headers: familyHeaders(),
         payload: {
           response: 'LOOKING',
           note: 'Sedang mengecek pesan',
@@ -243,6 +266,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'POST',
         url: `/v1/escalations/${dummyRunId}/respond`,
+        headers: familyHeaders(),
         payload: {
           response: 'HANDLE',
         },
@@ -259,6 +283,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'POST',
         url: `/v1/escalations/${dummyRunId}/respond`,
+        headers: familyHeaders(),
         payload: {
           response: 'HANDLE',
         },
@@ -273,6 +298,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'POST',
         url: `/v1/escalations/${dummyRunId}/respond`,
+        headers: familyHeaders(),
         payload: {
           response: 'INVALID_OPTION',
         },
@@ -309,6 +335,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/v1/escalations/${dummyRunId}/steps`,
+        headers: authHeaders(),
       })
 
       expect(res.statusCode).toBe(200)
@@ -324,6 +351,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/v1/escalations/${dummyRunId}/steps`,
+        headers: authHeaders(),
       })
 
       expect(res.statusCode).toBe(404)
@@ -379,6 +407,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'POST',
         url: '/internal/jobs/escalation-timeout',
+        headers: authHeaders(),
         payload: {
           runId: dummyRunId,
           currentState: EscalationRunStatus.WAITING_PATIENT,
@@ -402,6 +431,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'POST',
         url: '/internal/jobs/escalation-timeout',
+        headers: authHeaders(),
         payload: {
           runId: dummyRunId,
           currentState: EscalationRunStatus.WAITING_PATIENT,
@@ -419,6 +449,7 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
       const res = await app.inject({
         method: 'POST',
         url: '/internal/jobs/escalation-timeout',
+        headers: authHeaders(),
         payload: {
           runId: dummyRunId,
         },

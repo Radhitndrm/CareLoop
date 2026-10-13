@@ -142,6 +142,14 @@ npm install          # monorepo: workspace deps ter-install otomatis
 cd infra && docker compose up -d   # PostgreSQL + Redis
 ```
 
+Redis di-map ke port host **6380** (bukan 6379 default) supaya tidak bentrok dengan
+container lain di mesin yang sama. Port di dalam container tetap 6379, jadi `REDIS_URL`
+harus `redis://localhost:6380` — sudah sesuai dengan `apps/api/.env.example`.
+
+> Redis bersifat opsional. Bila `REDIS_URL` kosong, queue jatuh ke mode in-process
+> (`apps/api/src/lib/queue.ts`): pengingat & timeout eskalasi tetap jalan, tapi timer
+> hilang saat server restart, sehingga kurang cocok untuk demo panjang.
+
 ### 3. Konfigurasi environment
 
 Salin `.env.example` di setiap app menjadi `.env`, lalu isi (lihat [AGENTS.md](AGENTS.md#environment-variables) untuk daftar lengkap).

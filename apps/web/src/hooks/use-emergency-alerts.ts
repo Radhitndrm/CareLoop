@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { io, type Socket } from 'socket.io-client'
 import {
-  getStoredToken,
   getDashboardAlerts,
   respondEscalation,
   type ActiveAlerts,

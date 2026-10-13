@@ -77,6 +77,10 @@ async function seedPatient(
       patientId: userId,
       name: 'Metformin 500 mg',
       startedAt: new Date('2026-01-01T00:00:00.000Z'),
+      // Resep yang sudah disahkan dokter — konfirmasi hanya sah untuk status ini
+      // (docs/API.md §3.2). Kasus DRAFT diuji terpisah.
+      status: 'APPROVED',
+      isActive: true,
     },
   })
   const schedule = await prisma.schedule.create({
@@ -89,6 +93,8 @@ async function seedPatient(
       startDate: new Date('2026-01-01T00:00:00.000Z'),
       // endDate sengaja null: kolomnya nullable dan itu nilai yang dibaca Prisma di produksi.
       endDate: null,
+      status: 'APPROVED',
+      isActive: true,
     },
   })
 

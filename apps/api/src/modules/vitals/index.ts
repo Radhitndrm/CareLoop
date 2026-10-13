@@ -4,12 +4,14 @@ import { vitalIngestSchema } from '@careloop/shared'
 import { prisma } from '../../lib/prisma'
 import { getEnv } from '../../lib/env'
 import { notFound } from '../../lib/errors'
+import { UserRole } from '@careloop/shared'
+import { authenticate, requireRole } from '../../lib/auth'
 import { mockSmartwatchAdapter } from '../../integrations/smartwatch'
 import {
   ingestVitalSign,
   sanitizeRawPayload,
   evaluatePatientVitalsAnomaly,
-  extractPatientThresholds,
+  patientHrThresholds,
   type VitalsPrismaClient,
   type IngestVitalResult,
   type IngestVitalOptions,
@@ -19,7 +21,7 @@ export {
   ingestVitalSign,
   sanitizeRawPayload,
   evaluatePatientVitalsAnomaly,
-  extractPatientThresholds,
+  patientHrThresholds,
 }
 export type { VitalsPrismaClient, IngestVitalResult, IngestVitalOptions }
 
@@ -31,29 +33,40 @@ const devMockAnomalySchema = z.object({
 })
 
 export function registerVitalsRoutes(app: FastifyInstance): void {
-  // POST /v1/vitals — Ingest event vital dari smartwatch/mock (docs/API.md §3.4 / CL-201)
-  app.post('/v1/vitals', async (req, reply) => {
-    const input = vitalIngestSchema.parse(req.body)
-    const result = await ingestVitalSign(prisma, input)
+  // POST /v1/vitals — Ingest event vital dari smartwatch/mock (docs/API.md §3.4 / CL-201).
+  // Endpoint tulis yang memicu deteksi anomali & bisa membuka alert darurat,
+  // jadi tidak boleh terbuka: hanya care team (adapter smartwatch internal,
+  // mock, dan integrator perangkat yang memakai kredensial nakes).
+  app.post(
+    '/v1/vitals',
+    { preHandler: [authenticate, requireRole(UserRole.NAKES, UserRole.ADMIN)] },
+    async (req, reply) => {
+      const input = vitalIngestSchema.parse(req.body)
+      const result = await ingestVitalSign(prisma, input)
 
-    return reply.code(200).send({
-      data: {
-        id: result.vitalSign.id,
-        vitalId: result.vitalSign.id,
-        status: result.isDuplicate ? 'DUPLICATE_IGNORED' : 'RECORDED',
-        isAnomalous: result.vitalSign.isAnomalous,
-        anomalyReason: result.vitalSign.anomalyReason,
-        recordedAt: result.vitalSign.recordedAt.toISOString(),
-        emergencyAlertId: result.emergencyAlert?.id ?? null,
-        escalationRunId: result.escalationRun?.id ?? null,
-      },
-    })
-  })
+      return reply.code(200).send({
+        data: {
+          id: result.vitalSign.id,
+          vitalId: result.vitalSign.id,
+          status: result.isDuplicate ? 'DUPLICATE_IGNORED' : 'RECORDED',
+          isAnomalous: result.vitalSign.isAnomalous,
+          anomalyReason: result.vitalSign.anomalyReason,
+          recordedAt: result.vitalSign.recordedAt.toISOString(),
+          emergencyAlertId: result.emergencyAlert?.id ?? null,
+          escalationRunId: result.escalationRun?.id ?? null,
+        },
+      })
+    },
+  )
 
   // POST /v1/dev/mock-anomaly — Memicu stream anomali sintetis untuk demo (CL-203 / AGENTS.md §8)
-  app.post('/v1/dev/mock-anomaly', async (req, reply) => {
-    // Guard: Endpoint ini strictly non-production
-    if (process.env.NODE_ENV === 'production' || getEnv().NODE_ENV === 'production') {
+  // Endpoint demo untuk memicu anomali tanpa perangkat fisik (AGENTS.md §8).
+  // Dua lapis guard: harus bertoken DAN tidak boleh ada di production.
+  app.post(
+    '/v1/dev/mock-anomaly',
+    { preHandler: [authenticate, requireRole(UserRole.NAKES, UserRole.ADMIN)] },
+    async (req, reply) => {
+      if (process.env.NODE_ENV === 'production' || getEnv().NODE_ENV === 'production') {
       throw notFound('Route POST /v1/dev/mock-anomaly tidak ada')
     }
 

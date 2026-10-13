@@ -282,6 +282,30 @@ Aturan implementasi:
 
 ---
 
+## 5.b Dependency baru — `expo-secure-store` (mobile)
+
+**Keputusan:** token akses pasien disimpan lewat `expo-secure-store`, bukan
+`AsyncStorage` dan bukan memori modul.
+
+**Alasan:**
+- Token memberi akses ke rekam medis, jadwal obat, dan akses ke alur darurat. Untuk data
+  kesehatan, penyimpanan plaintext di direktori aplikasi tidak dapat diterima.
+- `AsyncStorage` hanya terenkripsi di level aplikasi; isinya ikut terbaca dari backup
+  perangkat dan dari akses root.
+- Memori modul (implementasi sebelumnya) membuat token hilang tiap aplikasi ditutup,
+  sehingga pasien harus login ulang setiap kali mau melihat jadwal — tidak layak untuk
+  pasien kronis yang memakai ini harian.
+- `expo-secure-store` memakai Keychain (iOS) dan EncryptedSharedPreferences (Android),
+  sudah jadi bagian dari Expo SDK sehingga tidak menambah native config manual.
+
+**Konsekuensi:** satu dependency native ditambahkan. `AuthScreen` dipakai sebagai
+satu-satunya jalan mendapatkan token, dan ada tombol "Keluar" di beranda karena
+perangkat sering dipakai bersama di ruang tunggu puskesmas.
+
+**Status:** Implemented (Fase E plan operasional).
+
+---
+
 ## 6. Arsitektur Decision Records (ADR)
 
 Format: Status — **Accepted** | Proposed | Superseded.

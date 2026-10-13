@@ -4,7 +4,7 @@ import {
   ingestVitalSign,
   sanitizeRawPayload,
   evaluatePatientVitalsAnomaly,
-  extractPatientThresholds,
+  patientHrThresholds,
   type VitalsPrismaClient,
 } from './vitals.service'
 
@@ -212,19 +212,21 @@ describe('ingestVitalSign (CL-201)', () => {
   })
 })
 
-describe('extractPatientThresholds (AN-7)', () => {
-  it('mengekstrak custom maxHr dan minHr dari healthConditions pasien', () => {
-    const conditions = ['hipertensi', 'maxHr:130', 'min_hr:45', 'diabetes']
-    const result = extractPatientThresholds(conditions)
-
-    expect(result.maxHr).toBe(130)
-    expect(result.minHr).toBe(45)
+describe('patientHrThresholds (AN-7)', () => {
+  it('mengambil ambang dari kolom Patient yang ditetapkan dokter', () => {
+    expect(patientHrThresholds({ hrMinBpm: 45, hrMaxBpm: 130 })).toEqual({
+      minHr: 45,
+      maxHr: 130,
+    })
   })
 
-  it('mengembalikan objek kosong jika healthConditions null, kosong, atau tidak memuat pola threshold', () => {
-    expect(extractPatientThresholds(null)).toEqual({})
-    expect(extractPatientThresholds([])).toEqual({})
-    expect(extractPatientThresholds(['hipertensi', 'asma'])).toEqual({})
+  it('mengembalikan objek kosong saat kolom kosong agar jatuh ke default sistem', () => {
+    expect(patientHrThresholds({ hrMinBpm: null, hrMaxBpm: null })).toEqual({})
+    expect(patientHrThresholds(undefined)).toEqual({})
+  })
+
+  it('mengabaikan nilai bukan angka', () => {
+    expect(patientHrThresholds({ hrMinBpm: null, hrMaxBpm: Number.NaN })).toEqual({})
   })
 })
 
@@ -241,7 +243,7 @@ describe('evaluatePatientVitalsAnomaly & Sequential Anomaly Integration (CL-202)
         findUnique: vi.fn().mockResolvedValue(
           options && 'patient' in options
             ? options.patient
-            : { id: dummyPatientId, smartwatchEnabled: true, healthConditions: [] }
+            : { id: dummyPatientId, smartwatchEnabled: true, hrMinBpm: null, hrMaxBpm: null }
         ),
       } as any,
       vitalSign: {
@@ -342,18 +344,19 @@ describe('evaluatePatientVitalsAnomaly & Sequential Anomaly Integration (CL-202)
     expect(result.vitalSign.anomalyReason).toBeNull()
   })
 
-  it('AN-7: menghormati custom threshold pasien (misal maxHr:130)', async () => {
+  it('AN-7: menghormati ambang per pasien yang ditetapkan dokter (hrMaxBpm 130)', async () => {
     const prevTime = new Date(baseTime.getTime() - 20_000)
     const mockPrisma = createVitalsPrisma({
       patient: {
         id: dummyPatientId,
         smartwatchEnabled: true,
-        healthConditions: ['maxHr:130'],
+        hrMinBpm: null,
+        hrMaxBpm: 130,
       },
       historyVitals: [{ recordedAt: prevTime, hrBpm: 125 }],
     })
 
-    // HR 126 di bawah custom threshold 130 -> tidak anomali
+    // HR 126 di bawah ambang pasien 130 -> tidak anomali
     const result1 = await ingestVitalSign(mockPrisma, {
       patientId: dummyPatientId,
       recordedAt: baseTime.toISOString(),
@@ -362,12 +365,13 @@ describe('evaluatePatientVitalsAnomaly & Sequential Anomaly Integration (CL-202)
     })
     expect(result1.vitalSign.isAnomalous).toBe(false)
 
-    // Jika melebihi custom threshold 130 (misal 135 dan sebelumnya 132) -> anomali hr>130
+    // Di atas ambang pasien 130 (misal 135 dan sebelumnya 132) -> anomali hr>130
     const mockPrismaHigh = createVitalsPrisma({
       patient: {
         id: dummyPatientId,
         smartwatchEnabled: true,
-        healthConditions: ['maxHr:130'],
+        hrMinBpm: null,
+        hrMaxBpm: 130,
       },
       historyVitals: [{ recordedAt: prevTime, hrBpm: 132 }],
     })

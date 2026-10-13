@@ -161,7 +161,30 @@ Dokumen ini mencantumkan teknologi per layer, **alasan pemilihan**, **versi yang
 - **Env validation**: zod + dotenv.
 - **Kode/formatter**: ESLint (typescript-eslint) + Prettier.
 - **Charts dashboard**: Recharts.
-- **Komponen web**: Tailwind + headlessui (aksesibel) — bukan UI kit penuh.
+- **Komponen web**: Tailwind + Radix primitives (aksesibel) — bukan UI kit penuh.
+
+### 17.1 Dependency UI (ditambahkan saat redesign)
+
+AGENTS.md aturan 6 melarang menambah dependency tanpa alasan tertulis. Berikut
+alasannya. Semuanya **runtime dependency**, tidak ada CLI build yang ditambahkan
+(`components.json` ada agar CLI shadcn bisa dipakai nanti bila perlu, tapi paket
+`shadcn` sendiri **tidak** dipasang — blok `@custom-variant` yang dibutuhkan
+ditulis manual di `globals.css`).
+
+| Paket | Scope | Alasan |
+|---|---|---|
+| `lucide-react` | web | Mengganti 10 SVG inline + ~20 emoji sebagai ikon. Satu keluarga ikon garis, konsisten, dan pohonnya bisa di-shake. |
+| `lucide-react-native` | mobile | Emoji pada tab bar tidak konsisten antar platform dan tidak punya label aksesibel. |
+| `react-native-svg` | mobile | Prasyarat render `lucide-react-native`. |
+| `clsx` + `tailwind-merge` | web | Satu fungsi `cn()`; `tailwind-merge` menyelesaikan konflik utility Tailwind yang muncul karena `cva` + `className`. |
+| `class-variance-authority` | web | Varian `Button`/`Badge` bertipe aman tanpa menulis ulang string kelas manual. |
+| `radix-ui` | web | Dialog/Sheet/Dropdown/Tabs yang aksesibel (fokus terperangkap, `Esc`, `aria-*`). Menulis sendiri berarti butuh ~400 baris dan mudah salah di detail fokus. |
+| `tw-animate-css` | web | Keyframe masuk/keluar untuk Dialog, Sheet, Dropdown. Tanpa itu setiap primitif akan membawa ~200 char animation utility sendiri. |
+| `recharts` | web | `docs/UI_UX.md` §6.4 sudah menetapkan Recharts. Menggantikan SVG yang dikomputasi manual (222 baris) dan AUDI tabel yang hilang bersama hardcode `#10b981`. |
+
+Tidak ditambahkan: `next-themes` (aplikasi mode terang saja), `gsap`
+(entrance cukup dengan CSS keyframes), `@tanstack/react-query` (belum perlu),
+`shadcn` CLI (utility scroll-fade/shimmer tidak dipakai).
 
 ## 18. Matriks "Jika terpaksa ganti" (Keputusan Swap)
 

@@ -77,6 +77,44 @@ Controller **tidak** menangkap error sendiri: lempar helper dari `lib/errors.ts`
 
 ---
 
+### 1.6 Status Ketersediaan Fitur
+
+Endpoint yang kontraknya sudah ditulis tapi belum diimplementasikan tetap menjawab, namun
+membungkus `data` dalam envelope berikut:
+
+```json
+{
+  "data": {
+    "status": "PENDING",
+    "statusLabel": "Segera hadir",
+    "statusDetail": "Belum diimplementasikan. Jangan dipakai untuk keputusan klinis.",
+    "data": []
+  }
+}
+```
+
+| `status` | `statusLabel` | Arti |
+|---|---|---|
+| `AVAILABLE` | — | Fitur selesai dan berjalan |
+| `MOCK` | Demo/mock | Sengaja memakai data contoh atau provider dummy |
+| `PENDING` | Segera hadir | Kontrak ada, implementasi belum |
+| `FORBIDDEN` | Tidak tersedia untuk role ini | Sengaja ditutup untuk peran tersebut |
+
+Endpoint yang memakai envelope ini:
+
+| Endpoint | Status |
+|---|---|
+| `GET /v1/patients/me/risk` | `MOCK` bila skor sudah tersimpan, `PENDING` bila belum pernah dihitung |
+| `GET /v1/education/topics` | `PENDING` |
+| `GET /v1/facilities/nearby` | `PENDING` |
+| `GET /v1/export/jobs` | `PENDING` |
+
+> `/v1/patients/me/risk` sengaja tidak pernah mengembalikan `score: 0`. Angka nol akan
+> dibaca sebagai "pasien aman", padahal tidak ada perhitungan yang berjalan. Kalau belum
+> ada skor, field `score` bernilai `null` dan status `PENDING`.
+
+---
+
 ## 2. Autentikasi
 
 ### POST `/v1/auth/otp/request`
@@ -138,18 +176,31 @@ Pasien & keluarga tidak memakai endpoint ini; mereka lewat OTP di atas.
   "data": {
     "accessToken": "eyJ...",
     "expiresIn": 86400,
-    "user": { "id": "u1", "role": "NAKES", "fullName": "dr. Dewi Lestari", "isVerified": true }
+    "user": {
+      "id": "u1",
+      "role": "NAKES",
+      "nakesRole": "DOKTER",
+      "fullName": "dr. Dewi Lestari",
+      "isVerified": true
+    }
   }
 }
 ```
 
 - `expiresIn` dalam detik, berasal dari `JWT_EXPIRES_IN` (default `24h`).
-- Claim token: `{ sub, role }` — tanpa data pribadi.
+- Claim token: `{ sub, role, nakesRole? }` — tanpa data pribadi. `nakesRole` hanya ada untuk
+  akun NAKES dan menentukan kewenangan klinis (lihat §3.16).
 - **401 `UNAUTHORIZED`** dengan pesan tunggal `Nomor/email atau kata sandi salah` untuk semua
   kegagalan kredensial (akun tidak ada, kata sandi salah, role bukan nakes/admin, akun tanpa
   kata sandi). Pesan sengaja tidak dibedakan agar nomor terdaftar tidak bisa ditebak.
 - **403 `FORBIDDEN`** hanya jika kata sandi benar tetapi akun dinonaktifkan.
-- Akun demo seed: `081100000001` / `CareLoop#Demo2026` (dr. Dewi Lestari — data sintetis).
+- Akun demo seed, seluruhnya memakai kata sandi `CareLoop#Demo2026` (data sintetis):
+
+  | Nomor | Peran | NakesRole | Batasan |
+  |---|---|---|---|
+  | `081100000001` | NAKES | `DOKTER` | Dapat menyetujui resep & ambang HR |
+  | `081100000004` | NAKES | `PERAWAT` | Hanya draft; tidak dapat menyetujui |
+  | `081100000003` | ADMIN | — | Seluruh wilayah + kelola akun nakes |
 
 ### POST `/v1/auth/refresh`
 Refresh JWT dengan `refreshToken` di body.
@@ -162,12 +213,169 @@ Refresh JWT dengan `refreshToken` di body.
 
 ### 3.1 Pasien
 
+Tahap 1 alur: pendaftaran & pengelolaan data dasar pasien dilakukan **nakes dalam wilayah penugasannya**; admin bebas tanpa batasan wilayah.
+
 | Method | Path | Role | Deskripsi |
 |---|---|---|---|
 | GET | `/v1/patients/me` | PATIENT, FAMILY (scope) | Profil lengkap pasien (detail jika `can_view_health`) |
 | PUT | `/v1/patients/me` | PATIENT | Update profil (alamat, living_situation, timezone, voice_enabled, dll.) |
-| GET | `/v1/patients/:id` | NAKES (scope), PATIENT (diri sendiri) | Detail pasien |
-| GET | `/v1/patients` | NAKES, ADMIN | Daftar pasien (filter: `district`, `disease`, `riskLevel`, `status`) |
+| POST | `/v1/patients` | NAKES (scope), ADMIN | **Daftarkan pasien baru** (Tahap 1) |
+| GET | `/v1/patients` | NAKES (scope), ADMIN | Daftar pasien dalam scope |
+| GET | `/v1/patients/:id` | NAKES (scope), ADMIN | Detail pasien |
+| PUT | `/v1/patients/:id` | NAKES (scope), ADMIN | Update data dasar & riwayat penyakit |
+| PUT | `/v1/patients/:id/hr-thresholds` | NAKES **DOKTER/BIDAN**, ADMIN | Tetapkan ambang detak jantung (lihat §3.4) |
+| GET | `/v1/patients/:id/activation` | NAKES (scope), ADMIN | Checklist prasyarat aktivasi + alasan yang belum terpenuhi |
+| POST | `/v1/patients/:id/activate` | NAKES **DOKTER/BIDAN**, ADMIN | Satu-satunya jalan menaikkan status ke `ACTIVE` |
+| PATCH | `/v1/patients/:id/status` | NAKES **DOKTER/BIDAN**, ADMIN | Tangguhkan (`INACTIVE`) / blokir (`BLOCKED`) / pulihkan (`ONBOARDING`) |
+
+**Scope:** NAKES hanya melihat dan mengubah pasien di puskesmas/distrik penugasannya. Patient di luar scope dijawab `404` (bukan `403`) agar keberadaannya tidak terkonfirmasi. ADMIN tanpa pembatasan.
+
+Cakupan Puskesmas ditentukan oleh `patients.primary_puskesmas_id` (relasi eksplisit ke puskesmas penanggung jawab). `nakes_contacts` tetap ikut dipertimbangkan untuk pasien lama yang belum punya puskesmas utama dan untuk rujukan antar-puskesmas.
+
+**POST /v1/patients — Request:**
+```json
+{
+  "fullName": "Bu Ratna",
+  "phone": "081200000001",
+  "districtCode": "3471",
+  "puskesmasId": "6f1a1e7c-3f1c-4a2b-9c1d-2b7a5e0d1a01",
+  "livingSituation": "ALONE",
+  "healthConditions": ["DIABETES", "HYPERTENSION"],
+  "emergencyPreference": "NAKES_FIRST",
+  "consentShareWithNakes": true
+}
+```
+**Response 201:** objek pasien lengkap. `puskesmasId` wajib dan harus berada dalam scope NAKES — memilih puskesmas di luar wilayah ditolak `403`.
+
+Sisi server membuat akun `User`(role `PATIENT`) **tanpa kata sandi** dalam transaksi yang sama, sehingga pasien hanya bisa masuk lewat OTP WhatsApp. Nakes yang mendaftar otomatis tercatat sebagai `NakesContact` utama agar pasien tersebut langsung masuk dashboard-nya.
+
+Pasien baru **selalu** dibuat dengan `status: "ONBOARDING"` dan `primaryPuskesmasId` terisi.
+Status tidak pernah langsung `ACTIVE` di endpoint ini — pengingat obat yang belum
+disahkan dokter tidak boleh keluar hanya karena pasien berhasil didaftarkan.
+
+#### Pencegahan duplikasi
+
+| Method | Path | Role | Deskripsi |
+|---|---|---|---|
+| GET | `/v1/patients/lookup?phone=&nik=` | NAKES, ADMIN | Cek kecocokan sebelum membuat pasien |
+| POST | `/v1/patients/:id/link-clinic` | NAKES (scope), ADMIN | Tautkan pasien existing ke Puskesmas |
+| POST | `/v1/patients/:id/verification-instructions` | NAKES (scope), ADMIN | Kirim ulang instruksi OTP |
+
+**GET /v1/patients/lookup — 200:**
+```json
+{
+  "data": {
+    "hasConflict": true,
+    "matches": [
+      {
+        "kind": "OUT_OF_SCOPE",
+        "patientId": null,
+        "fullName": null,
+        "maskedPhone": "********0002",
+        "status": null,
+        "primaryPuskesmasName": null,
+        "matchedOn": "PHONE",
+        "hint": "Nomor ini sudah dipakai akun lain, tetapi di luar wilayah penugasan Anda. Hubungi admin untuk menautkannya."
+      }
+    ]
+  }
+}
+```
+
+`kind` menentukan quanto data yang boleh dilihat:
+
+| kind | Arti | Data yang ditampilkan |
+|---|---|---|
+| `IN_SCOPE` | Pasien dalam wilayah pemanggil | id, nama, nomor disamarkan, status, Puskesmas |
+| `OUT_OF_SCOPE` | Akun ada di luar wilayah | **hanya** nomor disamarkan + `hint` |
+| `NOT_A_PATIENT` | Nomor milik akun non-pasien | **hanya** nomor disamarkan + `hint` |
+
+Pencarian sengaja tidak dibatasi scope supaya duplikasi tetap terdeteksi, tapi kebocoran
+dibatasi pada "ada akun di nomor ini". Nakes cukup tahu harus menyiapkan konteks ke admin
+tanpa memperoleh akses ke record yang bukan miliknya. Nomor selalu disamarkan
+(empat digit terakhir saja) supaya operator bisa mencocokkan tanpa menyalin data.
+
+Kecocokan pada nomor **dan** NIK di akun yang sama digabung menjadi satu entri.
+
+#### Status operasional & aktivasi
+
+`status` menentukan apakah pasien boleh disentuh sistem: hanya `ACTIVE` yang diproses
+scheduler reminder/eskalasi. `ONBOARDING`, `INACTIVE`, dan `BLOCKED` tidak menerima
+pesan apa pun, berapa pun resep dan jadwal yang sudah disetujui.
+
+**GET /v1/patients/:id/activation — 200:**
+```json
+{
+  "data": {
+    "ready": false,
+    "checks": [
+      { "key": "PUSKESMA", "label": "Puskesmas utama ditunjuk dan aktif", "satisfied": true, "detail": null, "fixPath": null },
+      { "key": "ESCALATION_CONTACT", "label": "Kontak eskalasi tersedia", "satisfied": false,
+        "detail": "Minimal satu kontak keluarga atau kontak nakes yang bisa menerima alert.",
+        "fixPath": "/patients" }
+    ],
+    "blockers": [ { "key": "ESCALATION_CONTACT", "detail": "Minimal satu kontak keluarga atau kontak nakes yang bisa menerima alert." } ]
+  }
+}
+```
+
+Kunci checklist: `PUSKESMA`, `CONSENT`, `VERIFIED`, `MINIMUM_DATA`, `ESCALATION_CONTACT`,
+`APPROVED_MEDICATION`, `ACTIVE_SCHEDULE`. Daftar lengkap prasyarat ada di
+[docs/DATABASE.md §3.2](DATABASE.md#32-patients).
+
+**POST /v1/patients/:id/activate — 200:**
+```json
+{ "data": { "id": "p1", "status": "ACTIVE", "checklist": { "ready": true, "checks": [], "blockers": [] } } }
+```
+
+**400 bila prasyarat belum lengkap** — `details.blockers` berisi daftar yang sama supaya
+UI bisa menautkan operator ke layar perbaikannya:
+
+```json
+{
+  "error": {
+    "code": "BAD_REQUEST",
+    "message": "Pasien belum memenuhi syarat aktivasi",
+    "details": {
+      "blockers": [
+        { "key": "APPROVED_MEDICATION", "label": "Minimal satu resep disetujui dokter/bidan",
+          "detail": "Belum ada resep berstatus APPROVED. Resep DRAFT tidak boleh diproses.",
+          "fixPath": "/patients" }
+      ]
+    }
+  }
+}
+```
+
+**POST /v1/patients/:id/verification-instructions — 200:**
+```json
+{
+  "data": {
+    "patientId": "p1",
+    "maskedPhone": "********0001",
+    "otpExpiresAt": "2026-08-16T10:05:00.000Z",
+    "retryAfterSec": 30,
+    "instructionsSent": true
+  }
+}
+```
+
+Endpoint ini **tidak pernah** menandai pasien sebagai terverifikasi — hanya
+`POST /v1/auth/otp/verify` yang boleh. Cooldown-nya sama dengan login OTP
+(`OTP_RESEND_COOLDOWN_SEC`), jadi form pendaftaran tidak bisa dipakai membanjiri
+WhatsApp pasien. Nomor yang sudah terverifikasi ditolak `403`.
+
+Checklist dihitung ulang di server pada setiap panggilan — UI tidak pernah boleh
+memutuskan. Perawat dan kader **tidak** boleh mengaktifkan pasien (`403`); mereka boleh
+melengkapi data, menambah keluarga, dan membuat draft resep.
+
+**PATCH /v1/patients/:id/status — Request:**
+```json
+{ "status": "INACTIVE", "reason": "Sedang dirawat di luar wilayah" }
+```
+
+Menuju `ACTIVE` ditolak `400` — harus lewat `/activate` supaya checklist tidak bisa
+dilewati. Transisi yang tidak ada di peta (§DATABASE 3.2) juga ditolak `400`.
 
 **GET /v1/patients/me — 200:**
 ```json
@@ -190,15 +398,40 @@ Refresh JWT dengan `refreshToken` di body.
 
 ### 3.2 Obat & Jadwal
 
+> **Persetujuan klinis.** Resep berstatus `DRAFT` **tidak berjalan**: tidak ada reminder, tidak ada konfirmasi, tidak ada eskalasi. Hanya `DOKTER`/`BIDAN` (atau `ADMIN`) yang dapat menaikkan status ke `APPROVED`, dan hanya `APPROVED` yang mengaktifkan jadwal. Alasannya: keputusan dosis dan jadwal yang keliru dapat menimbulkan false alarm atau gagal mendeteksi bahaya.
+
 | Method | Path | Role | Deskripsi |
 |---|---|---|---|
-| GET | `/v1/patients/me/medications` | PATIENT | Daftar obat |
-| POST | `/v1/patients/me/medications` | PATIENT, NAKES (scope) | Tambah obat |
-| PUT | `/v1/medications/:id` | NAKES | Update obat |
-| GET | `/v1/patients/me/schedules` | PATIENT | Daftar jadwal |
-| POST | `/v1/patients/:id/schedules` | NAKES | Buat jadwal |
-| PUT | `/v1/schedules/:id` | NAKES, PATIENT | Update jadwal (reschedule) |
-| PUT | `/v1/schedules/:id/toggle` | PATIENT, NAKES | Aktif/nonaktif |
+| GET | `/v1/patients/me/medications` | PATIENT | Daftar obat (hanya yang `APPROVED`) |
+| GET | `/v1/patients/:id/medications` | NAKES (scope), ADMIN | Daftar obat + status persetujuan |
+| POST | `/v1/patients/:id/medications` | NAKES (scope), ADMIN | **Buat draft resep** (perawat/bidan) |
+| POST | `/v1/patients/:id/schedules` | NAKES (scope), ADMIN | Tambah jadwal pada obat yang ada |
+| POST | `/v1/medications/:id/approve` | NAKES **DOKTER/BIDAN**, ADMIN | **Setujui / tolak resep** |
+| PUT | `/v1/medications/:id` | NAKES (scope) | Update obat (belum terimplementasi) |
+| PUT | `/v1/schedules/:id` | NAKES, PATIENT | Update jadwal (belum terimplementasi) |
+| PUT | `/v1/schedules/:id/toggle` | PATIENT, NAKES | Aktif/nonaktif (belum terimplementasi) |
+
+**POST /v1/patients/:id/medications — Request:**
+```json
+{
+  "name": "Metformin",
+  "dosage": "500 mg",
+  "form": "TABLET",
+  "instructions": "Sesudah makan",
+  "startedAt": "2026-08-01"
+}
+```
+**Response 201:** objek obat `status: "DRAFT"`, `isActive: false`.
+
+**POST /v1/medications/:id/approve — Request:**
+```json
+{ "decision": "APPROVED", "note": "Dosis sesuai SOAP" }
+```
+`decision`: `APPROVED` | `REJECTED`. Obatnya **dan seluruh jadwalnya** diperbarui bersama dalam satu operasi — jadwal yang tertinggal `DRAFT` sementara obatnya aktif akan membuat pasien mendapat pengingat obat yang belum disetujui.
+
+Perubahan status yang sudah final ditolak: menyetujui ulang obat `APPROVED` → `409`; menyetujui ulang yang `REJECTED` → `422`.
+
+Jadwal yang dibuat pada obat yang **sudah** `APPROVED` langsung aktif — keputusan klinis sudah diberikan pada obat induknya, jadi tidak perlu persetujuan kedua. Jadwal pada obat `REJECTED` ditolak `422`.
 
 **POST /v1/patients/:id/schedules — Request:**
 ```json
@@ -209,11 +442,10 @@ Refresh JWT dengan `refreshToken` di body.
   "dailyFrequency": 1,
   "doseQty": "1 tablet",
   "startDate": "2026-08-01",
-  "timeWindowMinutes": 30,
-  "isActive": true
+  "timeWindowMinutes": 30
 }
 ```
-**Response 201:** objek `schedule` + `nextFireAt` (dihitung server).
+**Response 201:** objek obat induk + jadwal; `nextFireAt` hanya terisi bila jadwalnya benar-benar aktif.
 - `daysOfWeek` kosong / tidak dikirim = setiap hari. `dailyFrequency` default `1`.
 
 
@@ -224,7 +456,44 @@ Refresh JWT dengan `refreshToken` di body.
 | GET | `/v1/patients/me/reminders` | PATIENT | Riwayat reminder (status, waktu) |
 | POST | `/v1/compliance/confirm` | PATIENT | Konfirmasi "sudah minum" (app) |
 | POST | `/v1/compliance/defer` | PATIENT | "Tunda 15 menit" |
-| GET | `/v1/patients/me/compliance` | PATIENT, FAMILY(scope) | Riwayat kepatuhan |
+| GET | `/v1/patients/me/compliance` | PATIENT, FAMILY(scope) | Riwayat kepatuhan (belum terimplementasi) |
+| GET | `/v1/patients/:id/compliance` | NAKES (scope), ADMIN | **Riwayat kepatuhan versi nakes** |
+
+**GET /v1/patients/:id/compliance** adalah sisi nakes dari endpoint di atas: setiap kali pasien menekan "sudah minum" lewat WhatsApp maupun tombol di aplikasi, hasilnya tampil di sini sebagai `CONFIRMED` / `CONFIRMED_LATE`, sehingga perawat dan dokter bisa melihat kepatuhan per pasien tanpa menghitung ulang dari agregat dashboard.
+
+Query: `from`, `to` (ISO date), `status`, `limit` (default 50, maks 200), `offset`.
+
+**Response 200:**
+```json
+{
+  "data": [
+    {
+      "id": "1f0c7b2e-...",
+      "scheduledAt": "2026-10-09T00:00:00Z",
+      "confirmedAt": "2026-10-09T00:05:00Z",
+      "status": "CONFIRMED",
+      "channel": "WHATSAPP",
+      "medicationName": "Amlodipine",
+      "scheduleId": "00000000-0000-4000-8000-000000000302",
+      "timeOfDay": "07:00",
+      "doseQty": "1 tablet"
+    }
+  ],
+  "meta": {
+    "total": 7,
+    "pageSize": 50,
+    "page": 1,
+    "summary": {
+      "confirmed": 4,
+      "confirmedLate": 1,
+      "missed": 2,
+      "pending": 0,
+      "adherenceRate": 0.71
+    }
+  }
+}
+```
+`summary.adherenceRate` = `(confirmed + confirmedLate) / (confirmed + confirmedLate + missed)`. `CONFIRMED_LATE` tetap dihitung procuring diminum (AC-2.3), bukan incumplimiento.
 
 **POST /v1/compliance/confirm — Request:**
 ```json
@@ -266,13 +535,54 @@ Refresh JWT dengan `refreshToken` di body.
   minum obat sendiri; konfirmasi oleh petugas dicatat lewat modul `compliance` yang relevan.
 - **Konfirmasi via WhatsApp** masuk lewat webhook (lihat §6) — bukan endpoint ini.
 
+#### GET `/v1/patients/me/reminders` — jadwal obat milik pasien sendiri
+
+Role: PATIENT, FAMILY. Sumber data layar "Sudah minum" di aplikasi pasien.
+
+```json
+{
+  "data": [
+    {
+      "id": "s1",
+      "medicationName": "Metformin 500mg",
+      "dosage": "500 mg",
+      "instructions": "Sesudah makan",
+      "doseQty": "1 tablet",
+      "timeOfDay": "08:00",
+      "daysOfWeek": [],
+      "startDate": "2026-01-01",
+      "endDate": null,
+      "nextFireAt": "2026-08-17T01:00:00.000Z"
+    }
+  ]
+}
+```
+
+`nextFireAt` dihitung di server memakai zona waktu pasien, jadi aplikasi tidak perlu
+menghitung ulang jam dinding. `id` selalu berasal dari server — aplikasi tidak pernah
+memakai UUID dummy, sehingga konfirmasi tidak mungkin jatuh ke jadwal orang lain.
+
+Query hanya mengambil jadwal yang **obat dan jadwalnya sama-sama `APPROVED` serta
+aktif**. `patientId` tidak pernah diterima dari query maupun body.
+
 ### 3.4 Vital & Anomali (Fitur 4)
 
 | Method | Path | Role | Deskripsi |
 |---|---|---|---|
 | POST | `/v1/vitals` | SMARTWATCH_SERVICE (service token) | Ingest event vital (dari smartwatch adapter) |
 | GET | `/v1/patients/me/vitals` | PATIENT, NAKES (scope) | Riwayat vital |
+| PUT | `/v1/patients/:id/hr-thresholds` | NAKES **DOKTER/BIDAN**, ADMIN | **Ambang detak jantung per pasien** |
 | POST | `/v1/dev/mock-anomaly` | (dev only) | Trigger anomali sintetis untuk demo |
+
+**PUT /v1/patients/:id/hr-thresholds — Request:**
+```json
+{ "hrMinBpm": 45, "hrMaxBpm": 130 }
+```
+Menetapkan ambang detak jantung individual pasien. Hanya dokter atau bidan yang boleh — ambang yang terlalu rapat memicu false alarm, terlalu longgar justru lethalling bahaya (lihat §3.2). Perawat dapat membaca nilai ini tetapi tidak mengubahnya. `hrMinBpm >= hrMaxBpm` ditolak `400`; mengirim keduanya `null` (atau mengosongkan keduanya) ditolak agar ambang default sistem tidak terhapus diam-diam.
+
+Bila kolom kosong, deteksi anomali memakai default sistem dari `ANOMALY_HR_MIN` / `ANOMALY_HR_MAX`. Nilai per pasien menggantikan default tersebut, sementara `ANOMALY_WINDOW_SEC` tetap global.
+
+> Sebelumnya ambang per pasien dititipkan sebagai teks bebas di `healthConditions` (mis. `"max_hr:130"`) lalu diparse regex. Format bebas seperti itu tidak bisa dibedakan mana yang disahkan dokter, sehingga digantikan kolom eksplisit ini.
 
 **POST /v1/vitals — Request:**
 ```json
@@ -565,12 +875,16 @@ Refresh JWT dengan `refreshToken` di body.
 
 | Method | Path | Role | Deskripsi |
 |---|---|---|---|
-| GET | `/v1/patients/me/family-contacts` | PATIENT | Daftar kontak keluarga |
-| POST | `/v1/patients/me/family-contacts` | PATIENT, NAKES(scope) | Tambah kontak |
-| PUT | `/v1/family-contacts/:id` | PATIENT | Update tier/prioritas/aktif |
-| DELETE | `/v1/family-contacts/:id` | PATIENT | Hapus kontak |
-| GET | `/v1/patients/:id/nakes-contacts` | NAKES, PATIENT | Daftar nakes pasien |
-| POST | `/v1/patients/:id/nakes-contacts` | NAKES(scope) | Assign nakes/kader |
+| GET | `/v1/patients/me/family-contacts` | PATIENT | Daftar kontak keluarga milik sendiri |
+| POST | `/v1/patients/me/family-contacts` | PATIENT | Tambah kontak (pasien sendiri) |
+| POST | `/v1/patients/:id/family-contacts` | NAKES (scope), ADMIN | Tambah kontak untuk pasien dalam scope |
+| PUT | `/v1/family-contacts/:id` | PATIENT (milik sendiri), NAKES (scope), ADMIN | Update tier/prioritas/aktif |
+| DELETE | `/v1/family-contacts/:id` | PATIENT (milik sendiri), NAKES (scope), ADMIN | Hapus kontak |
+| POST | `/v1/family-contacts/:id/verify` | PATIENT (milik sendiri), NAKES (scope), ADMIN | Verifikasi nomor agar aktif menerima alert |
+| GET | `/v1/patients/:id/nakes-contacts` | NAKES (scope), PATIENT | Daftar nakes pasien (dibaca lewat `GET /v1/patients/:id`) |
+| POST | `/v1/patients/:id/nakes-contacts` | NAKES(scope) | Assign nakes/kader (belum terimplementasi) |
+
+Endpoint `/me` hanya untuk PATIENT: path itu menunjuk akun pemanggil, dan akun nakes tidak punya profil pasien. Nakes & admin memakai path `/v1/patients/:id/...`, yang patientId-nya diverifikasi terhadap scope nakes.
 
 **POST /v1/patients/me/family-contacts — Request:**
 ```json
@@ -595,6 +909,7 @@ Refresh JWT dengan `refreshToken` di body.
 | GET | `/v1/dashboard/adherence` | NAKES (scope) | Seri data kepatuhan (grafik) harian & per jenis penyakit |
 | GET | `/v1/dashboard/risk-patients` | NAKES (scope) | Pasien berisiko tinggi (skor >= 70 / HIGH) |
 | GET | `/v1/dashboard/alerts` | NAKES (scope) | Stream alert darurat & eskalasi aktif |
+| GET | `/v1/dashboard/work-queue` | NAKES (scope), ADMIN | Antrean kerja: pasien yang menunggu tindakan (lihat §3.8b) |
 
 **Query Parameters Filter (CL-210 / FR-5.2 / AC-5.2 / AC-5.3):**
 Didukung di seluruh endpoint dashboard (`/summary`, `/adherence`, `/risk-patients`, `/alerts`):
@@ -697,7 +1012,187 @@ Didukung di seluruh endpoint dashboard (`/summary`, `/adherence`, `/risk-patient
 }
 ```
 
-### 3.9 Refill (Fitur 6)
+### 3.8b Antrean Kerja Nakes
+
+`GET /v1/dashboard/work-queue` — Role: NAKES (scope), ADMIN.
+
+Berbeda dari `/summary` yang berupa statistik, endpoint ini mengembalikan **daftar pasien
+yang menunggu tindakan**, dikelompokkan menurut tindakan itu. Semua query memakai filter
+scope yang sama dengan dashboard utama, jadi work queue tidak pernah menampilkan pasien
+milik puskesmas lain.
+
+| Query | Deskripsi |
+|---|---|
+| `district` / `disease` | Sama seperti filter dashboard |
+| `clinicId` | Saring ke satu puskesmas penanggung jawab |
+| `limit` | Item per kelompok (default 10, maks 50) |
+
+```json
+{
+  "data": [
+    {
+      "key": "UNVERIFIED",
+      "label": "Menunggu verifikasi WhatsApp",
+      "description": "Nomor belum diverifikasi lewat OTP, jadi pasien belum bisa diaktifkan.",
+      "count": 2,
+      "items": [
+        {
+          "patientId": "p1",
+          "fullName": "Bu Ratna",
+          "phone": "081200000001",
+          "status": "ONBOARDING",
+          "primaryPuskesmasName": "Puskesmas Umbulharjo",
+          "reasons": ["Nomor WhatsApp belum terverifikasi"]
+        }
+      ]
+    }
+  ],
+  "meta": { "actionablePatients": 5 }
+}
+```
+
+| `key` | Isi |
+|---|---|
+| `INCOMPLETE` | Data minimum pasien belum lengkap (field yang kosong disebut di `reasons`) |
+| `UNVERIFIED` | Nomor WhatsApp belum diverifikasi |
+| `NO_ESCALATION_CONTACT` | Tidak ada kontak keluarga maupun nakes yang bisa menerima alert |
+| `NO_APPROVED_MEDICATION` | Belum ada resep berstatus `APPROVED` |
+| `NO_ACTIVE_SCHEDULE` | Resep `APPROVED` ada tapi belum punya jadwal aktif |
+| `ACTIVE_ESCALATION` | Jumlah eskalasi yang belum selesai |
+| `OPEN_EMERGENCY` | Jumlah darurat yang belum ditangani |
+
+Dua kelompok terakhir **sengaja `items: []`**: yang dibutuhkan di sana adalah banyaknya
+insiden, dan penanganannya lewat layar emergency/eskalasi — bukan daftar pasien.
+
+Item pada kelompok onboarding tidak memuat data klinis, hanya identitas, status, puskesmas,
+dan alasan. Prinsipnya: work queue menjawab "pasien mana yang perlu saya tangani", bukan
+"apa isi rekam medisnya".
+
+Pasien berstatus `ACTIVE` tidak pernah muncul di work queue — antrean ini memang untuk
+pasien yang belum selesai diaktifkan.
+
+---
+
+### 3.9 Farmasi — Permintaan & Penyerahan Obat
+
+Alur dua sumber: **rutin** dibuat scheduler otomatis dari resep yang sudah disetujui
+dokter (`source: ROUTINE`), dan **permintaan pasien** di luar jadwal yang wajib
+lewat persetujuan dokter dulu (`source: PATIENT_REQUEST`).
+
+#### State machine
+
+```
+PENDING_DOCTOR ──approve──> QUEUED ──start──> PREPARING ──ready──> READY ──dispense──> DISPENSED
+      │                       │                   │                 │
+      └──reject──> REJECTED   └──── out_of_stock / substituted ─────┘ (dari tiga status ini)
+```
+
+Status final (`DISPENSED`, `REJECTED`, `OUT_OF_STOCK`, `SUBSTITUTED`) tidak punya
+transisi keluar. `OVERDUE` **bukan** status — field `isOverdue` dihitung dari
+`dueAt` vs hari ini selama status masih aktif.
+
+#### Endpoint
+
+| Method | Path | Role | Deskripsi |
+|---|---|---|---|
+| GET | `/v1/patients/me/medications` | PATIENT, FAMILY | Obat aktif milik sendiri (dasar form "Minta Obat") |
+| POST | `/v1/medication-requests` | PATIENT, FAMILY | Ajukan permintaan di luar jadwal |
+| GET | `/v1/medication-requests` | FARMASI, DOKTER, BIDAN, ADMIN, PASIEN*(milik sendiri) | Antrean + daftar menunggu dokter |
+| GET | `/v1/medication-requests/:id` | idem | Detail + audit trail |
+| PATCH | `/v1/medication-requests/:id/decision` | DOKTER, BIDAN | Setujui / tolak |
+| PATCH | `/v1/medication-requests/:id/status` | **FARMASI** | Semua aksi penyiapan & penyerahan |
+| GET | `/v1/medication-requests/queue-summary` | FARMASI, NAKES, ADMIN | Badge count navbar |
+| POST | `/v1/medication-requests/generate-routine` | FARMASI, NAKES, ADMIN | Trigger manual scheduler (demo) |
+| GET | `/v1/dispensing-records` | FARMASI, DOKTER, BIDAN, ADMIN | Riwayat penyerahan |
+| PATCH | `/v1/medications/:id` | DOKTER, BIDAN | Setujui penggantian obat yang ditandai apotek |
+
+\* `PATIENT`/`FAMILY` melihat hanya miliknya; `patientId` di-pin dari klaim JWT.
+Mengirim `patientId` milik orang lain dijawab `403`.
+
+#### POST `/v1/medication-requests`
+
+```jsonc
+// req — patientId TIDAK diterima di body, selalu dari klaim JWT
+{ "medicationId": "uuid", "requestedQuantity": 30,
+  "reasonCode": "MEDICATION_LOST", "reasonNotes": "Kotak obat basah" }
+```
+
+Respon `201`:
+
+```jsonc
+{ "data": {
+  "id": "uuid", "patientName": "Ratna Wijaya",
+  "medicationName": "Metformin", "requestedQuantity": 30,
+  "source": "PATIENT_REQUEST", "status": "PENDING_DOCTOR",
+  "isOverdue": false, "reasonLabel": "Obat hilang",
+  "dueAt": "2026-10-14", "quantityRemaining": 3,
+  "createdAt": "2026-10-11T08:00:00.000Z" } }
+```
+
+Ditolak `422` bila resepnya belum `APPROVED`, sudah dihentikan dokter, atau masa
+pakainya habis. Ditolak `400` bila jumlah melebihi `PHARMACY_MAX_DAYS_SUPPLY` atau
+sisa stok + satu siklus penuh.
+
+#### PATCH `/v1/medication-requests/:id/decision`
+
+```jsonc
+{ "decision": "APPROVED", "approvedQuantity": 20, "note": "Setuju sebagian" }
+{ "decision": "REJECTED", "note": "Resep masih stok, ambil 10 hari lagi" }  // note wajib
+```
+
+Ditolak `403` bila pemanggil bukan DOKTER/BIDAN/ADMIN. Ditolak `422` bila status
+bukan `PENDING_DOCTOR` — termasuk saat sudah pernah diputuskan.
+
+#### PATCH `/v1/medication-requests/:id/status`
+
+```jsonc
+{ "action": "START_PREPARING" }
+{ "action": "MARK_READY" }
+{ "action": "DISPENSED", "quantityDays": 30 }                        // quantityDays wajib
+{ "action": "MARK_OUT_OF_STOCK", "reason": "Stok habis di gudang" }  // reason wajib
+{ "action": "MARK_SUBSTITUTED", "reason": "Generik habis",
+  "substituteName": "Glucophage XR 500 mg" }                         // keduanya wajib
+{ "action": "RETURNED_TO_QUEUE" }
+```
+
+Ditolak `403` bila pemanggil bukan FARMASI/ADMIN — **dokter dan perawat tidak bisa
+menyiapkan obat**. Transisi tidak valid dijawab `422 INVALID_TRANSITION` dengan
+pesan yang menyebutkan aksi yang sah dari status tersebut.
+
+`DISPENSED` additionally: membuat `DispensingRecord`, memperbarui
+`MedicationStock.quantityRemaining`, dan menggeser `Medication.nextPickupAt`.
+
+#### GET `/v1/medication-requests`
+
+Query: `status`, `source`, `overdue=true|false`, `patientId`, `search`, `limit`, `offset`.
+
+```jsonc
+{ "data": [ /* MedicationRequest[] */ ],
+  "meta": { "total": 42, "summary": {
+    "queued": 12, "preparing": 3, "ready": 5, "overdue": 2, "pendingDoctor": 4 } } }
+```
+
+Filter `overdue` diterapkan di server dan tidak pernah menyertakan status final.
+
+#### Notifikasi WhatsApp
+
+Dikirim ke pasien **dan** seluruh kontak keluarga aktif:
+
+| Momen | Pesan |
+|---|---|
+| Permintaan disetujui | Masuk antrean farmasi |
+| Permintaan ditolak | Beserta **alasan dokter** |
+| `MARK_READY` | Obat siap diambil |
+| `MARK_OUT_OF_STOCK` | Stok habis + alasan |
+| `MARK_SUBSTITUTED` | Nama obat penggantinya |
+
+Kegagalan kirim tidak membatalkan transisi status — dicatat sebagai `Notification`
+berstatus `FAILED` agar bisa dikirim ulang (pola yang sama dengan reminder & eskalasi).
+
+Scheduler `PHARMACY_REFILL_LEAD_DAYS` hari sebelum tanggal ambil membuat request
+`ROUTINE` langsung berstatus `QUEUED`: persetujuan dokter sudah melekat pada resepnya.
+
+#### 3.9 Refill (Fitur 6)
 
 | Method | Path | Role | Deskripsi |
 |---|---|---|---|
@@ -705,7 +1200,35 @@ Didukung di seluruh endpoint dashboard (`/summary`, `/adherence`, `/risk-patient
 | POST | `/v1/refill/:medicationId/confirm` | PATIENT, FAMILY(scope) | Tandai "sudah ambil obat" |
 | GET | `/v1/patients/:id/refill-status` | NAKES (scope) | Per pasien |
 
-### 3.10 Edukasi & Skrining (Fitur 8, 9)
+### 3.10 Master Data Puskesmas
+
+Puskesmas menentukan cakupan pasien dan siapa yang boleh punya penugasan, jadi
+UUID-nya tidak pernah tampil di layar — operator selalu memilih nama.
+
+| Method | Path | Role | Deskripsi |
+|---|---|---|---|
+| GET | `/v1/puskesmas` | NAKES (dibatasi penugasan), ADMIN | Daftar untuk dropdown |
+| GET | `/v1/puskesmas/:id` | NAKES, ADMIN | Detail satu puskesmas |
+| GET | `/v1/puskesmas/districts` | NAKES, ADMIN | Kode wilayah yang tersedia |
+| POST | `/v1/admin/puskesmas` | ADMIN | Tambah puskesmas |
+| PATCH | `/v1/admin/puskesmas/:id` | ADMIN | Ubah data / aktif-nonaktifkan |
+
+**Scope baca:** NAKES hanya menerima puskesmas dalam penugasannya, dan staf tanpa
+penugasan mendapat daftar kosong — bukan seluruh daftar. Tanpa pembatasan ini,
+operator bisa mendaftarkan pasien ke puskesmas yang tidak terlihat olehnya, sehingga
+pasien itu langsung "hilang" dari dashboard.
+
+Query: `?search=`, `?district=`, `?includeInactive=true` (hanya berlaku untuk ADMIN).
+
+Nama puskesmas tidak boleh duplikat **dalam satu wilayah**. Pengecekan dilakukan di
+aplikasi, bukan lewat unique index, karena `district_code` nullable — PostgreSQL
+menganggap NULL berbeda dengan NULL sehingga index tidak akan menangkap dua puskesmas
+tanpa kode wilayah yang namanya sama.
+
+`is_active: false` tidak menghapus puskesmas: pasien dan riwayat penugasan masih
+menunjuk ke sana. Yang dinonaktifkan hanya kemunculannya di pilihan baru.
+
+### 3.11 Edukasi & Skrining (Fitur 8, 9)
 
 | Method | Path | Role | Deskripsi |
 |---|---|---|---|
@@ -716,7 +1239,7 @@ Didukung di seluruh endpoint dashboard (`/summary`, `/adherence`, `/risk-patient
 | POST | `/v1/screenings/:id/submit` | PATIENT | Submit → skor + level |
 | GET | `/v1/screenings` | PATIENT, NAKES(scope) | Riwayat skrining |
 
-### 3.11 Faskes Terdekat (Fitur 10)
+### 3.12 Faskes Terdekat (Fitur 10)
 
 | Method | Path | Role | Deskripsi |
 |---|---|---|---|
@@ -735,7 +1258,7 @@ Didukung di seluruh endpoint dashboard (`/summary`, `/adherence`, `/risk-patient
 }
 ```
 
-### 3.12 Risk Prediction (Fitur 12)
+### 3.13 Risk Prediction (Fitur 12)
 
 | Method | Path | Role | Deskripsi |
 |---|---|---|---|
@@ -743,7 +1266,7 @@ Didukung di seluruh endpoint dashboard (`/summary`, `/adherence`, `/risk-patient
 | GET | `/v1/patients/:id/risk` | NAKES(scope) | Per pasien |
 | POST | `/v1/risk/recompute` | ADMIN (job) | Trigger recompute (biasanya job harian) |
 
-### 3.13 Export Anonim (Fitur 13)
+### 3.14 Export Anonim (Fitur 13)
 
 | Method | Path | Role | Deskripsi |
 |---|---|---|---|
@@ -760,11 +1283,159 @@ Didukung di seluruh endpoint dashboard (`/summary`, `/adherence`, `/risk-patient
 { "data": { "jobId": "ex1", "status": "PENDING", "url": "/v1/export/jobs/ex1" } }
 ```
 
-### 3.14 Audit (Admin)
+### 3.15 Audit (Admin)
 
 | Method | Path | Role | Deskripsi |
 |---|---|---|---|
 | GET | `/v1/audit-logs` | ADMIN | Query audit log (filter action, actor, date) |
+
+### 3.16 Manajemen Akun (Admin)
+
+Tahap 4 alur: akun **faskes dan nakes** dibuat serta dikelola oleh admin, bukan oleh nakes itu sendiri — sebab peran klinis menentukan siapa yang boleh menyetujui resep, jadi tidak boleh ditetapkan sendiri oleh pihak yang akandorong perubahan itu.
+
+| Method | Path | Role | Deskripsi |
+|---|---|---|---|
+| POST | `/v1/admin/nakes-accounts` | ADMIN | Buat akun nakes + peran klinis + wilayah awal |
+| GET | `/v1/admin/nakes-accounts` | ADMIN | Daftar nakes & peran klinisnya |
+
+**POST /v1/admin/nakes-accounts — Request:**
+```json
+{
+  "fullName": "dr. Dewi Lestari",
+  "phone": "081100000001",
+  "password": "minimal-8-karakter",
+  "nakesRole": "DOKTER",
+  "puskesmasId": "6f1a1e7c-3f1c-4a2b-9c1d-2b7a5e0d1a01"
+}
+```
+`nakesRole`: `DOKTER` | `PERAWAT` | `BIDAN` | `KADER` | `LAINNYA`. Kolom ini **wajib diisi eksplisit** — tidak ada nilai default di database, supaya peran klinis selalu merupakan keputusan sadar, bukan hasil samping pembuatan akun.
+
+Harus menyertakan `puskesmasId` atau `districtCode`: tanpa penugasan wilayah, akun nakes tidak punya scope dan tidak akan melihat pasien apa pun. Akun dan seluruh penugasannya ditulis dalam satu transaksi.
+
+Nomor HP yang sudah dipakai ditolak `409`.
+
+#### 3.15.1 Siklus hidup akun nakes
+
+| Method | Path | Role | Deskripsi |
+|---|---|---|---|
+| POST | `/v1/admin/nakes-accounts` | ADMIN | Undang staf (lihat di bawah) |
+| GET | `/v1/admin/nakes-accounts` | ADMIN | Daftar staf + peran + status + penugasan |
+| GET | `/v1/admin/nakes-accounts/:id` | ADMIN | Detail satu staf |
+| PATCH | `/v1/admin/nakes-accounts/:id` | ADMIN | Ubah `nakesRole` / `staffStatus` |
+| POST | `/v1/admin/nakes-accounts/:id/activation-code` | ADMIN | Terbitkan kode aktivasi baru |
+| POST | `/v1/admin/nakes-accounts/:id/assignments` | ADMIN | Tambah penugasan wilayah |
+| DELETE | `/v1/admin/nakes-accounts/:id/assignments/:assignmentId` | ADMIN | Tutup penugasan (tidak menghapus) |
+| POST | `/v1/auth/activate` | terbuka | Staf menukar kode aktivasi dengan kata sandi |
+
+```text
+INVITED --(kode aktivasi)--> ACTIVE --> SUSPENDED --> ACTIVE
+   |                          |
+   +--------------------------+------> DEACTIVATED  (final, tidak bisa dihidupkan lagi)
+```
+
+`staffStatus` adalah sumber kebenaran kelayakan login; `users.isActive` selalu
+disinkronkan dari kolom itu. Menuju status selain `ACTIVE` juga **menutup seluruh
+penugasan aktif** staf tersebut (`is_active = false` + `ended_at`), karena penugasan
+yang tertinggal berarti staf masih punya wilayah walau sudah ditangguhkan. Baris
+penugasan tidak dihapus supaya riwayat bisa diaudit.
+
+**POST /v1/admin/nakes-accounts — Request:**
+```json
+{
+  "fullName": "Perawat Baru",
+  "phone": "081200000002",
+  "nakesRole": "PERAWAT",
+  "assignments": [{ "` + LOW + `Id": "6f1a1e7c-3f1c-4a2b-9c1d-2b7a5e0d1a01" }]
+}
+```
+
+`assignments` wajib berisi minimal satu entri. Ada dua jalur pembuatan akun:
+
+- `password` **dikosongkan** -> akun berstatus `INVITED` dan respons mengembalikan
+  `activationCode` (6 digit). Kode ini hanya ditampilkan sekali: yang disimpan di
+  database adalah hash-nya. Hilang? `POST /:id/activation-code` menerbitkan yang baru
+  dan membatalkan yang lama.
+- `password` **diisi** -> akun langsung `ACTIVE`, tanpa kode.
+
+`assignments` menolak puskesmas yang tidak ada maupun yang sedang nonaktif (`400`/`404`).
+
+**POST /v1/auth/activate — Request:**
+```json
+{ "phone": "081200000002", "code": "418372", "password": "SandiBaru123" }
+```
+
+Kode salah, kedaluwarsa (`ACTIVATION_CODE_TTL_SEC`, default 7 hari), atau sudah pernah
+dipakai ditolak dengan pesan yang sama — `400 "Kode aktivasi salah atau sudah kedaluwarsa"`
+— supaya pesan error tidak bisa dipakai untuk menebak kode yang benar. Setelah berhasil,
+hash kode dihapus (sekali pakai), akun menjadi `ACTIVE` dan nomor HP terverifikasi.
+
+Endpoint ini terbuka tanpa token karena memang belum ada akun aktif untuk orang tersebut;
+kode itulah bukti kepemilikan akun, dan kode hanya bisa dibuat admin.
+
+---
+
+### 3.17 Autentikasi Endpoint
+
+### 3.17.1 Endpoint yang wajib bertoken
+
+Seluruh `/v1/*` memerlukan `Authorization: Bearer <token>` kecuali yang ditulis
+eksplisit di bawah. Termasuk yang semula terbuka dan kini ditutup:
+
+| Endpoint | Role | Isi sensitif yang dilindungi |
+|---|---|---|
+| `GET /v1/emergencies/*` | care team | Lokasi GNSS, detak jantung, nomor HP |
+| `GET /v1/escalations/*` | care team | NIK, `livingSituation`, nomor HP keluarga |
+| `POST /v1/vitals` | care team | Menulis vital yang memicu alert darurat |
+| `POST /internal/jobs/*` | nakes, admin | Memicu transisi eskalasi |
+
+Pengecualian yang tetap terbuka: `POST /v1/auth/*` (login/OTP/aktivasi staf) dan
+`POST /v1/webhooks/whatsapp` (verifikasi signature provider).
+
+`POST /v1/emergencies/:id/respond` dan `/timeout` tetap dibuka untuk
+`PATIENT`/`FAMILY` — itulah cara pasien menjawab "Apakah Anda aman?", dan
+menutupnya akan mematikan jaring pengaman yang justru menjadi inti fitur.
+
+---
+
+## 3.18 Peran Klinis Nakes
+
+| Peran | Draft resep | **Setujui resep** | **Setujui permintaan obat** | Ambang HR | Lihat dashboard & data pasien |
+|---|---|---|---|---|---|
+| `DOKTER` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `BIDAN` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `PERAWAT` | ✅ | ❌ `403` | ❌ `403` | ❌ `403` | ✅ |
+| `KADER` | ✅ | ❌ `403` | ❌ `403` | ❌ `403` | ✅ |
+| `FARMASI` | ❌ `403` | ❌ `403` | ❌ `403` | ❌ `403` | ❌ `403` |
+| `ADMIN` | ✅ | ✅ | ✅ | ✅ | ✅ (seluruh wilayah) |
+
+### 3.18.1 `FARMASI`
+
+Apotek punya satu responsibility: menyiapkan dan menyerahkan obat. Aksesnya
+**hanya** ke `/v1/medication-requests*` dan `/v1/dispensing-records`.
+
+Semua data pasien lain tertutup untuknya lewat `requireCareTeamRole`: dashboard,
+daftar & detail pasien (NIK, alamat, riwayat penyakit, skor risiko, ambang HR),
+resep, kepatuhan, vital, darurat, dan eskalasi. Alasannya prinsip data
+minimization — apotek butuh nama, obat, dosis, jumlah, dan nomor kontak untuk
+menyerahkan obat; sisanya tidak diperlukan dan tidak bisa dia bertindak upon.
+
+Verifikasi identitas saat penyerahan dilakukan dengan melihat KTP pasien,
+bukan dengan membaca NIK dari sistem.
+
+> Gate sesungguhnya ada di **server** (`requireCareTeamRole` /
+> `requirePharmacyRole` di `lib/auth.ts`). Menyembunyikan menu di UI bukan
+> pengaman — endpoint tetap menolak `403` bila diakses langsung.
+
+> `FARMASI` adalah satu-satunya peran yang boleh mengubah status penyiapan &
+> penyerahan obat (`PATCH /v1/medication-requests/:id/status`) — dan satu-satunya
+> yang **tidak** bisa.-Prescribe, menyetujui permintaan, dan menetapkan ambang HR
+> tetap milik `DOKTER`/`BIDAN`. Kennethuan berlawanan ini disengaja: satu peran
+> tidak boleh melakukan dua hal yang bertentangan.
+| `ADMIN` | ✅ | ✅ | ✅ | ✅ (seluruh wilayah) |
+
+Peran klinis (`nakesRole`) dibaca dari klaim JWT dan berlaku selama masa berlaku token, jadi perubahan peran baru berlaku setelah nakes login ulang.
+
+> Jalur pendaftaran lewat kader/posyandu untuk pasien tinggal sendiri **belum ada**; pasien didaftarkan oleh nakes (Tahap 1). Lihat rencana lanjutan.
 
 ---
 
@@ -814,18 +1485,46 @@ Handshake dengan `auth: { token: JWT }`. Server memvalidasi & membuka room sesua
 
 ## 5. Scheduler / Webhook (Server-to-Server)
 
-### POST `/internal/jobs/reminder` (internal service) — **belum diimplementasikan**
-Rencana endpoint yang dipanggil worker scheduler untuk membangun & mengirim reminder.
-Body: `{ scheduleId, dueAt }`. Response: `{ reminderLogId }`.
+Tidak ada lagi endpoint HTTP untuk memicu reminder atau timeout eskalasi. Keduanya
+sekarang berjalan sebagai job queue persisten yang didaftarkan saat server start
+(`src/index.ts` → `buildApp({ enableReminderScheduler, enableEscalationScheduler })`).
+Endpoint di bawah tetap dipertahankan hanya sebagai pemicu manual/operasional.
 
-CL-106 sudah menyediakan job handler-nya (`modules/reminders/reminder.worker.ts` →
-`handleReminderJob`) dan antrean `reminder` (`createReminderJobQueue`), tetapi belum
-membuka endpoint HTTP. Pemicu job saat ini hanya queue langsung; penjadwalan periodik
-yang memindai `schedules` dan meng-enqueue job belum ada (CL-105 baru
-`nextFireAt`). Token `SERVICE_TOKEN` untuk `/internal/*` juga belum ada di `lib/env.ts`.
+### Dispatcher reminder (`reminder-dispatcher`)
+
+Satu tick tiap 60 detik memindai `schedules` dan menjadwalkan job `reminder` untuk slot
+yang jatuh di dalam horizon 10 menit ke depan, memakai `nextFireAt` (§3.3). Job
+dijadwalkan dengan `jobId` deterministik `reminder:{scheduleId}:{dueAt}`, jadi pemindaian
+berulang pada slot yang sama tidak menghasilkan kiriman ganda.
+
+Pemindaian hanya mengambil jadwal yang:
+
+```text
+is_active = true
+  AND schedules.status = 'APPROVED'          // gate klinis (§3.2)
+  AND patients.status = 'ACTIVE'             // gate operasional (§3.1)
+```
+
+`handleReminderJob` memeriksa ulang ketiga syarat tersebut, jadi jalur internal/manual
+yang memancing job secara langsung tetap tidak bisa mengirim ke pasien non-ACTIVE.
+
+### Reconciler timeout eskalasi (`escalation-timeout-reconcile`)
+
+Satu tick tiap 60 detik memindai `escalation_runs` yang berstatus `WAITING_PATIENT`,
+`FAMILY_TIER_1`, `FAMILY_TIER_2`, atau `NAKES`, lalu menjadwalkan job
+`escalation-timeout` pada waktu habisnya tier berjalan. `jobId`-nya
+`escalation-timeout:{runId}:{status}`, jadi tick berulang tidak menumpuk job.
+
+Reconciler dipilih daripada chaining karena satu tick idempoten memastikan setiap run
+aktif selalu punya timeout terjadwal — termasuk run yang timeout-nya hilang akibat
+restart. Job basi tetap aman: `handleEscalationTimeout` membandingkan
+`expectedStatus` dan melewati run yang sudah berganti tier atau sudah selesai.
+
+Alert keluarga dan nakes dikirim lewat `WhatsAppEscalationNotifier` yang memakai
+`WhatsAppService` (provider aktif dari `PROVIDER_MODE`), bukan mock.
 
 ### POST `/internal/jobs/escalation-timeout` (internal service)
-Dipanggil BullMQ saat timeout state machine. Body: `{ runId, currentState }`. Response: `{ newState }` atau `422` jika state sudah berubah (idempoten).
+Pemicu manual untuk operational debugging. Body: `{ runId, currentState }`. Response: `{ newState }` atau `422` jika state sudah berubah (idempoten). Jalur ini memakai notifier produksi, sehingga alert benar-benar terkirim.
 
 ### POST `/internal/vitals/webhook` (smartwatch provider webhook, opsional)
 Menampung push dari Google Fit/HealthKit → sama seperti `POST /v1/vitals`. Auth via service token.

@@ -26,10 +26,12 @@ const SCHEDULE_ROW = {
   patientId: PATIENT_ID,
   timeOfDay: '09:00',
   isActive: true,
+  status: 'APPROVED',
   doseQty: '1 tablet',
   medication: { name: 'Metformin 500mg' },
   patient: {
     voiceEnabled: false,
+    status: 'ACTIVE',
     user: { phone: '081234567890', fullName: 'Bu Siti Test' },
   },
 }
@@ -319,6 +321,27 @@ describe('handleReminderJob — idempotensi & guard', () => {
     expect(h.provider.sent).toHaveLength(0)
     expect(h.reminderRows).toHaveLength(0)
   })
+
+  // Guardrail flow §2: pasien yang belum diaktivasi tidak boleh menerima pesan,
+  // sama halnya dengan gate resep DRAFT dan jadwal non-aktif.
+  it.each(['ONBOARDING', 'INACTIVE', 'BLOCKED'])(
+    'melewati pasien berstatus %s walau resep dan jadwalnya sah',
+    async (patientStatus) => {
+      const h = createHarness({
+        schedule: { ...SCHEDULE_ROW, patient: { ...SCHEDULE_ROW.patient, status: patientStatus } },
+      })
+
+      const result = await handleReminderJob(deps(h), payload())
+
+      expect(result.outcome).toBe('SKIPPED')
+      expect(result.error).toContain('belum berstatus ACTIVE')
+      expect(result.error).toContain(patientStatus)
+      expect(h.provider.sent).toHaveLength(0)
+      expect(h.reminderRows).toHaveLength(0)
+      // Tidak boleh ada eskalasi — tidak ada yang perlu dikejar.
+      expect(h.escalationRuns).toHaveLength(0)
+    },
+  )
 })
 
 describe('handleReminderJob — voice reminder (RM-3, RM-4)', () => {

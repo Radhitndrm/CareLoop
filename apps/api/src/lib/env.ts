@@ -84,6 +84,14 @@ export const envSchema = z
     ANOMALY_HR_MIN: z.coerce.number().int().min(20).max(200).default(50),
     ANOMALY_HR_MAX: z.coerce.number().int().min(21).max(240).default(120),
     ANOMALY_WINDOW_SEC: seconds(60),
+
+    // Alur farmasi (docs/API.md §3.6).
+    /** Seberapa awal (hari) permintaan rutin dibuat sebelum tanggal ambil. */
+    PHARMACY_REFILL_LEAD_DAYS: z.coerce.number().int().min(0).max(30).default(3),
+    /** Jatah default hari per pengambilan bila dokter tidak mengisi `medications.daysSupply`. */
+    PHARMACY_DEFAULT_DAYS_SUPPLY: z.coerce.number().int().min(1).max(365).default(30),
+    /** Batas atas jumlah hari yang boleh diminta/dityerahkan dalam satu penyerahan. */
+    PHARMACY_MAX_DAYS_SUPPLY: z.coerce.number().int().min(1).max(365).default(90),
   })
   .superRefine((value, ctx) => {
     if (value.ANOMALY_HR_MIN >= value.ANOMALY_HR_MAX) {
@@ -192,5 +200,24 @@ export function anomalyRuleConfig(): { minHr: number; maxHr: number; windowMs: n
     minHr: env.ANOMALY_HR_MIN,
     maxHr: env.ANOMALY_HR_MAX,
     windowMs: env.ANOMALY_WINDOW_SEC * 1000,
+  }
+}
+
+/**
+ * Aturan penjadwalan permintaan rutin farmasi (docs/API.md §3.6).
+ * Scheduler membuat permintaan ROUTINE untuk setiap obat APPROVED yang
+ * `nextPickupAt` sudah masuk lead time. Semua angka configurable — tidak
+ * ada lead time yang dipatok di dalam service.
+ */
+export function pharmacyRefillConfig(): {
+  leadDays: number
+  defaultDaysSupply: number
+  maxDaysSupply: number
+} {
+  const env = getEnv()
+  return {
+    leadDays: env.PHARMACY_REFILL_LEAD_DAYS,
+    defaultDaysSupply: env.PHARMACY_DEFAULT_DAYS_SUPPLY,
+    maxDaysSupply: env.PHARMACY_MAX_DAYS_SUPPLY,
   }
 }

@@ -38,6 +38,28 @@ Jika informasi tidak cukup, **bertanya dulu daripada berasumsi**.
 3. **Idempotency**: webhook WhatsApp & event smartwatch bisa terkirim ganda — pastikan handler idempoten (pakai `event_id` / transaction guard).
 4. **Tidak ada auto-commit**. Hanya commit saat diminta, dengan pesan yang jelas.
 5. Jalankan **lint + test** sebelum menyatakan selesai (lihat bagian 5).
+6. **Keputusan klinis hanya oleh nakes yang berwenang.** Resep berstatus `DRAFT` (perawat/bidan)
+   **tidak boleh** menghasilkan reminder, konfirmasi, atau eskalasi — hanya `DOKTER`/`BIDAN`
+   yang boleh menaikkan ke `APPROVED`. Gate ditegakkan di route lewat `requireClinicalRole`
+   ([lib/auth.ts](apps/api/src/lib/auth.ts)), bukan hanya di UI. Ambang detak jantung per pasien
+   (`Patient.hrMinBpm`/`hrMaxBpm`) juga hanya boleh diset dokter/bidan. Jangan turunkan gate ini
+   tanpa alasan klinis yang tertulis.
+7. **Petugas farmasi (`NakesRole.FARMASI`) adalah kebalikan dari gate di atas.** Boleh
+   menyiapkan, menandai siap, dan menyerahkan obat — lewat `requirePharmacyRole`
+   ([lib/auth.ts](apps/api/src/lib/auth.ts)). Namun **dilarang** membuat/menyetujui resep,
+   menyetujui permintaan obat, menetapkan ambang detak jantung, maupun mengubah resep
+   (`PATCH /v1/medications/:id`). Satu peran tidak boleh melakukan dua hal yang
+   bertentangan. Jangan gabungkan kewenangan ini.
+   Akses data pasien juga ditutup: apotek **hanya** boleh menyentuh
+   `/v1/medication-requests*` dan `/v1/dispensing-records`. Dashboard, daftar &
+   detail pasien, resep, kepatuhan, vital, darurat, dan eskalasi semuanya menolak
+   `FARMASI` lewat `requireCareTeamRole` (prinsip data minimization — cukup nama,
+   obat, dosis, jumlah, dan kontak untuk menyerahkan obat).
+8. **Seluruh `/v1/*` wajib bertoken.** Jangan pernah mendaftar route klinis tanpa
+   `preHandler: [authenticate, ...]`. Endpoint darurat/eskalasi/vital dulu terbuka
+   dan membocorkan lokasi GNSS, detak jantung, dan nomor HP keluarga tanpa login —
+   `src/lib/rbac.routes.test.ts` menjaga agar tidak terulang. Pengecualian hanya
+   `POST /v1/auth/*` dan webhook provider.
 
 ---
 
@@ -76,7 +98,9 @@ careloop/
 │   ├── api/                 # Backend: Node.js + Fastify, TypeScript
 │   │   ├── src/
 │   │   │   ├── modules/     # Fitur per domain (1 folder 1 domain)
-│   │   │   │   ├── patients/
+│   │   │   │   ├── patients/        # Pendaftaran & data dasar pasien (scope-guarded)
+│   │   │   │   ├── medications/     # Resep & jadwal + gerbang persetujuan dokter
+│   │   │   │   ├── pharmacy/         # Permintaan obat, antrean & penyerahan (apotek)
 │   │   │   │   ├── reminders/       # Scheduler & reminder WA
 │   │   │   │   ├── compliance/      # Konfirmasi 1-tap
 │   │   │   │   ├── escalation/      # State machine eskalasi
@@ -88,6 +112,7 @@ careloop/
 │   │   │   │   ├── facilities/      # Faskes terdekat
 │   │   │   │   ├── risk/            # Prediksi rule-based
 │   │   │   │   ├── export/          # Export anonim
+│   │   │   │   ├── admin/           # Manajemen akun nakes (Tahap 4 alur)
 │   │   │   │   └── auth/
 │   │   │   ├── integrations/  # WhatsApp, GPS, TTS, Google Fit/HealthKit, SMS
 │   │   │   ├── lib/           # DB (Prisma/Drizzle), Redis, shared utils
@@ -168,7 +193,7 @@ Sumber tunggal untuk api: `apps/api/src/lib/env.ts` (validasi zod, gagal = start
 | `DATABASE_URL` | api | — (wajib) | Koneksi PostgreSQL |
 | `DIRECT_URL` | api | — | Koneksi non-pooler untuk `prisma migrate` (Supabase) |
 | `TEST_DATABASE_URL` | api | — | DB integration test; **wajib beda** dari `DATABASE_URL` |
-| `REDIS_URL` | api | — | Opsional — cache & job queue |
+| `REDIS_URL` | api | `redis://localhost:6380` | Opsional — cache & job queue. Kosong = queue in-process (timer hilang saat restart). Port host 6380, bukan 6379 default |
 | `JWT_SECRET` | api | — (min 32 char) | Signing token |
 | `JWT_EXPIRES_IN` | api | `24h` | Masa berlaku access token |
 | `DATA_ENCRYPTION_KEY` | api | — | Enkripsi kolom sensitif |
@@ -194,6 +219,9 @@ Sumber tunggal untuk api: `apps/api/src/lib/env.ts` (validasi zod, gagal = start
 | `COMPLIANCE_CONFIRM_MAX_LATE_MINUTES` | api | `1440` | CL-107 — konfirmasi lewat dari ini ditolak `422` |
 | `ANOMALY_HR_MIN` / `ANOMALY_HR_MAX` | api | `50` / `120` | FR-4.2 — ambang anomali HR |
 | `ANOMALY_WINDOW_SEC` | api | `60` | FR-4.2 — jendela 2 bacaan berurutan |
+| `PHARMACY_REFILL_LEAD_DAYS` | api | `3` | §3.6 — berapa hari sebelum tanggal ambil request rutin dibuat |
+| `PHARMACY_DEFAULT_DAYS_SUPPLY` | api | `30` | §3.6 — jatah default bila dokter tidak mengisi `daysSupply` |
+| `PHARMACY_MAX_DAYS_SUPPLY` | api | `90` | §3.6 — batas atas hari per permintaan/penyerahan |
 | `NEXT_PUBLIC_API_URL` | web | — | Base URL API |
 | `EXPO_PUBLIC_API_URL` | mobile | — | Base URL API |
 
