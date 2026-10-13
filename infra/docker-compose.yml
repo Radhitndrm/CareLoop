@@ -21,8 +21,12 @@ services:
     image: redis:7-alpine
     container_name: careloop-redis
     restart: unless-stopped
+    # Host port 6380, bukan 6379 default. 6379 dipakai container lain di mesin
+    # pengembangan, dan `docker compose up` gagal seluruhnya kalau salah satu
+    # service tidak bisa bind port. Port dalam container tetap 6379, jadi
+    # REDIS_URL di .env harus menulis 6380.
     ports:
-      - '6379:6379'
+      - '6380:6379'
     volumes:
       - redisdata:/data
     healthcheck:

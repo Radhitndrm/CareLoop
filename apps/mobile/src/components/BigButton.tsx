@@ -1,80 +1,116 @@
-import React from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  ViewStyle,
-} from 'react-native'
+import type { ReactNode } from 'react'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { colors, hitSize, radius, spacing, toneSurface, typography, type Tone } from '../theme/tokens'
 
-export interface BigButtonProps {
-  label: string
-  color: string
-  onPress: () => void
-  disabled?: boolean
-  loading?: boolean
-  accessibilityHint?: string
-  style?: ViewStyle
-}
+type Variant = 'primary' | 'success' | 'danger' | 'secondary' | 'outline'
 
 export function BigButton({
   label,
-  color,
   onPress,
-  disabled = false,
-  loading = false,
-  accessibilityHint,
-  style,
-}: BigButtonProps) {
-  const isInteractive = !disabled && !loading
+  variant = 'primary',
+  icon,
+  disabled,
+  isLoading,
+  size = 'md',
+}: {
+  label: string
+  onPress: () => void
+  variant?: Variant
+  icon?: ReactNode
+  disabled?: boolean
+  isLoading?: boolean
+  size?: 'md' | 'lg'
+}) {
+  const height = size === 'lg' ? hitSize.danger : hitSize.min
+  const palette = resolvePalette(variant)
+  const isInactive = disabled || isLoading
 
   return (
     <Pressable
-      onPress={isInteractive ? onPress : undefined}
-      disabled={!isInteractive}
-      accessible={true}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled: !isInteractive }}
+      accessibilityState={{ disabled: Boolean(isInactive), busy: Boolean(isLoading) }}
+      disabled={isInactive}
+      onPress={onPress}
       style={({ pressed }) => [
-        styles.button,
-        { backgroundColor: disabled ? '#9CA3AF' : color },
-        pressed && isInteractive && styles.buttonPressed,
-        style,
+        styles.base,
+        { height, backgroundColor: palette.bg, borderColor: palette.border },
+        variant === 'primary' && styles.shadow,
+        pressed && !isInactive ? styles.pressed : null,
+        isInactive ? styles.disabled : null,
       ]}
     >
-      {loading ? (
-        <ActivityIndicator size="small" color="#FFFFFF" />
+      {isLoading ? (
+        <ActivityIndicator color={palette.fg} />
       ) : (
-        <Text style={styles.buttonLabel}>{label}</Text>
+        <View style={styles.content}>
+          {icon}
+          <Text
+            style={[
+              styles.label,
+              { color: palette.fg },
+              size === 'lg' ? styles.labelLarge : null,
+            ]}
+          >
+            {label}
+          </Text>
+        </View>
       )}
     </Pressable>
   )
 }
 
+function resolvePalette(variant: Variant) {
+  switch (variant) {
+    case 'primary':
+      return toneSurface.primary
+    case 'success':
+      return { bg: colors.success, fg: colors.textOnPrimary, border: colors.success }
+    case 'danger':
+      return toneSurface.danger
+    case 'secondary':
+      return { bg: colors.primarySoft, fg: colors.textSecondary, border: colors.primarySoft }
+    case 'outline':
+      return { bg: 'transparent', fg: colors.primary, border: colors.border }
+  }
+}
+
 const styles = StyleSheet.create({
-  button: {
-    minHeight: 60,
-    borderRadius: 14,
+  base: {
+    width: '100%',
+    borderRadius: radius.lg,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    elevation: 2,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    paddingHorizontal: spacing.lg,
   },
-  buttonPressed: {
-    opacity: 0.85,
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  label: {
+    fontSize: typography.button.fontSize,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  labelLarge: {
+    fontSize: 20,
+    lineHeight: 26,
+  },
+  shadow: {
+    shadowColor: colors.primary,
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  pressed: {
+    opacity: 0.88,
     transform: [{ scale: 0.99 }],
   },
-  buttonLabel: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textAlign: 'center',
+  disabled: {
+    opacity: 0.5,
   },
 })

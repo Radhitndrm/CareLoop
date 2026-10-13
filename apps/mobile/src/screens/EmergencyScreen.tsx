@@ -5,10 +5,26 @@ import {
   StyleSheet,
   Text,
   View,
-  TouchableOpacity,
+  Pressable,
   Platform,
 } from 'react-native'
+import {
+  CheckCircle2Icon,
+  ExternalLinkIcon,
+  HeartPulseIcon,
+  LinkIcon,
+  MapPinIcon,
+  PhoneCallIcon,
+  RefreshCwIcon,
+  RotateCcwIcon,
+  ShieldAlertIcon,
+  SirenIcon,
+  TriangleAlertIcon,
+} from 'lucide-react'
 import { BigButton } from '../components/BigButton'
+import { Card } from '../components/Card'
+import { IconWell, ProgressBar, Spinner, StatusBadge } from '../components/feedback'
+import { colors, radius, spacing, typography } from '../theme/tokens'
 import {
   respondEmergency,
   triggerEmergencyTimeout,
@@ -28,10 +44,10 @@ export interface EmergencyScreenProps {
   onSuccess?: (result: EmergencyResponseData) => void
 }
 
-// Dummy emergency UUID untuk keperluan demo offline/smoke test
-const DEFAULT_EMERGENCY_ID = '22222222-2222-4222-8222-222222222222'
 const EMERGENCY_PHONE = 'tel:112'
 const DEFAULT_TIMEOUT_SEC = 45
+
+type Status = 'PENDING_CONFIRMATION' | 'LOADING' | 'RESOLVED_SAFE' | 'ESCALATED' | 'ERROR'
 
 export function EmergencyScreen({
   initialEmergencyId,
@@ -40,12 +56,10 @@ export function EmergencyScreen({
   isFromDeepLink = false,
   onSuccess,
 }: EmergencyScreenProps) {
-  const [emergencyId, setEmergencyId] = useState<string>(
-    initialEmergencyId || DEFAULT_EMERGENCY_ID
-  )
-  const [status, setStatus] = useState<
-    'PENDING_CONFIRMATION' | 'LOADING' | 'RESOLVED_SAFE' | 'ESCALATED' | 'ERROR'
-  >('PENDING_CONFIRMATION')
+  // Tidak ada UUID dummy: incident selalu datang dari server atau deep link resmi.
+  // Tanpa ID yang valid, layar ini menampilkan instruksi, bukan tombol aksi palsu.
+  const [emergencyId, setEmergencyId] = useState<string>(initialEmergencyId ?? '')
+  const [status, setStatus] = useState<Status>('PENDING_CONFIRMATION')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [secondsRemaining, setSecondsRemaining] = useState<number>(initialTimeoutSec)
   const [location, setLocation] = useState<UserCoordinates | null>(null)
@@ -93,7 +107,7 @@ export function EmergencyScreen({
         if (prev <= 1) {
           if (timerRef.current) clearInterval(timerRef.current)
           // Timeout tercapai -> transisi ke state ESCALATED
-          handleTimeout()
+          void handleTimeout()
           return 0
         }
         return prev - 1
@@ -173,9 +187,7 @@ export function EmergencyScreen({
     } catch (err: unknown) {
       setStatus('ERROR')
       setErrorMessage(
-        err instanceof Error
-          ? err.message
-          : 'Gagal mengirim sinyal darurat ke server.'
+        err instanceof Error ? err.message : 'Gagal mengirim sinyal darurat ke server.'
       )
     }
   }
@@ -205,25 +217,27 @@ export function EmergencyScreen({
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Header Aplikasi Darurat */}
       <View style={styles.header}>
-        <View style={styles.emergencyBadge}>
-          <Text style={styles.emergencyBadgeText}>🚨 DARURAT MEDIS</Text>
-        </View>
-        <Text style={styles.title}>CareLoop</Text>
-        <Text style={styles.subtitle}>Sistem Respon &amp; Perlindungan Pasien</Text>
+        <StatusBadge
+          label="Darurat medis"
+          tone="danger"
+          icon={<SirenIcon size={14} color={colors.danger} />}
+        />
+        <Text style={styles.title}>Anomali detak jantung terdeteksi</Text>
+        <Text style={styles.subtitle}>
+          Sistem akan menghubungi keluarga dan tenaga kesehatan bila Anda tidak merespons.
+        </Text>
       </View>
 
-      {/* Banner info jika dibuka dari Deep Link */}
-      {isFromDeepLink && (
+      {isFromDeepLink ? (
         <View style={styles.deepLinkBanner}>
+          <LinkIcon size={16} color={colors.primary} />
           <Text style={styles.deepLinkText}>
-            🔗 Terbuka dari notifikasi anomali smartwatch / WhatsApp
+            Terbuka dari notifikasi anomali smartwatch / WhatsApp
           </Text>
         </View>
-      )}
+      ) : null}
 
-      {/* KARTU STATUS ANOMALI DETAK JANTUNG */}
       <View
         style={[
           styles.card,
@@ -231,34 +245,41 @@ export function EmergencyScreen({
         ]}
       >
         <View style={styles.pulseRow}>
-          <Text style={styles.pulseIcon}>💓</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardHeaderTitle}>
-              Anomali Detak Jantung Terdeteksi
-            </Text>
-            <Text style={styles.hrValueText}>
-              {initialHrBpm} <Text style={styles.bpmUnit}>BPM (Tinggi)</Text>
+          <IconWell tone="danger" size={52}>
+            <HeartPulseIcon size={24} color={colors.danger} />
+          </IconWell>
+          <View style={styles.pulseText}>
+            <Text style={styles.cardHeaderTitle}>Deteksi smartwatch</Text>
+            <Text style={styles.hrValue}>
+              {initialHrBpm} <Text style={styles.bpmUnit}>BPM</Text>
             </Text>
           </View>
         </View>
 
         <Text style={styles.cardExplanation}>
-          Sensor smartwatch mendeteksi lonjakan detak jantung yang melebihi ambang batas normal pasien kronis.
+          Sensor smartwatch mendeteksi lonjakan detak jantung yang melebihi ambang batas normal
+          pasien kronis.
         </Text>
 
-        {/* Informasi Status Lokasi GPS (AC-4.3) */}
         <View style={styles.locationContainer}>
           <View style={styles.locationHeaderRow}>
-            <Text style={styles.locationTitle}>📍 Lokasi GPS Pasien:</Text>
-            <TouchableOpacity
+            <Text style={styles.locationTitle}>
+              <MapPinIcon size={14} color={colors.textSecondary} /> Lokasi GPS
+            </Text>
+            <Pressable
               onPress={handleRefreshLocation}
               disabled={isLocating}
+              accessibilityRole="button"
+              accessibilityLabel="Segarkan koordinat GPS"
               style={styles.refreshLocButton}
             >
-              <Text style={styles.refreshLocText}>
-                {isLocating ? 'Mencari...' : '🔄 Segarkan GPS'}
-              </Text>
-            </TouchableOpacity>
+              {isLocating ? (
+                <Spinner size={14} color={colors.primary} />
+              ) : (
+                <RefreshCwIcon size={14} color={colors.primary} />
+              )}
+              <Text style={styles.refreshLocText}>{isLocating ? 'Mencari…' : 'Segarkan'}</Text>
+            </Pressable>
           </View>
 
           {location ? (
@@ -267,140 +288,151 @@ export function EmergencyScreen({
                 {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
                 {location.accuracyM ? ` (±${location.accuracyM}m)` : ''}
               </Text>
-              <TouchableOpacity
+              <Pressable
                 onPress={() => Linking.openURL(createGoogleMapsUrl(location.lat, location.lng))}
+                accessibilityRole="link"
               >
-                <Text style={styles.mapsLink}>Buka di Google Maps ↗</Text>
-              </TouchableOpacity>
+                <Text style={styles.mapsLink}>
+                  Buka di Google Maps <ExternalLinkIcon size={13} color={colors.primary} />
+                </Text>
+              </Pressable>
             </View>
           ) : (
             <Text style={styles.locationFallback}>
               {isLocating
-                ? 'Sedang mencari koordinat GPS...'
-                : 'Lokasi tidak tersedia (Izin GPS belum aktif)'}
+                ? 'Sedang mencari koordinat GPS…'
+                : 'Lokasi tidak tersedia (izin GPS belum aktif)'}
             </Text>
           )}
         </View>
       </View>
 
-      {/* STATE 1: PENDING CONFIRMATION DENGAN COUNTDOWN TIMER */}
-      {status === 'PENDING_CONFIRMATION' && (
-        <View style={styles.confirmSection}>
-          <View style={styles.timerBadge}>
-            <Text style={styles.timerLabel}>Sisa Waktu Konfirmasi:</Text>
-            <Text style={styles.timerSeconds}>{secondsRemaining} detik</Text>
-          </View>
-
-          {/* Progress Bar Visual Countdown */}
-          <View style={styles.progressBarBackground}>
-            <View
-              style={[
-                styles.progressBarFill,
-                {
-                  width: `${Math.max(
-                    0,
-                    Math.min(100, (secondsRemaining / initialTimeoutSec) * 100)
-                  )}%`,
-                },
-              ]}
-            />
-          </View>
-
+      {status === 'PENDING_CONFIRMATION' ? (
+        <Card>
+          <StatusBadge
+            label={`Sisa waktu konfirmasi: ${secondsRemaining} detik`}
+            tone={secondsRemaining <= 15 ? 'danger' : 'warning'}
+          />
+          <ProgressBar
+            value={(secondsRemaining / initialTimeoutSec) * 100}
+            tone={secondsRemaining <= 15 ? 'danger' : 'warning'}
+          />
           <Text style={styles.questionText}>Apakah Anda merasa aman saat ini?</Text>
 
           <View style={styles.buttonStack}>
             <BigButton
-              label="🟢 Saya Aman"
-              color="#16A34A"
+              label="Saya aman"
+              variant="success"
+              size="lg"
+              icon={<CheckCircle2Icon size={20} color={colors.textOnPrimary} />}
               onPress={handleSafe}
-              accessibilityHint="Tekan untuk konfirmasi Anda baik-baik saja dan batalkan eskalasi"
             />
-
             <BigButton
-              label="🆘 Saya Butuh Bantuan"
-              color="#EA580C"
+              label="Saya butuh bantuan"
+              variant="danger"
+              size="lg"
+              icon={<ShieldAlertIcon size={20} color={colors.danger} />}
               onPress={handleNeedHelp}
-              accessibilityHint="Tekan untuk mempercepat pengiriman bantuan ke keluarga dan nakes"
             />
           </View>
 
           <Text style={styles.subtext}>
-            Bila tidak ada respons dalam {initialTimeoutSec} detik, sistem otomatis mengeskalasikan kondisi ke kontak darurat keluarga &amp; nakes.
+            Bila tidak ada respons dalam {initialTimeoutSec} detik, sistem otomatis mengeskalasikan
+            kondisi ke kontak darurat keluarga &amp; nakes.
           </Text>
-        </View>
-      )}
+        </Card>
+      ) : null}
 
-      {/* STATE 2: LOADING */}
-      {status === 'LOADING' && (
+      {!emergencyId ? (
+        <Card>
+          <Text style={styles.footerNote}>
+            Tidak ada insiden darurat aktif. Layar ini akan terisi otomatis saat sistem
+            mendeteksi anomali, atau saat Anda membuka tautan peringatan dari WhatsApp.
+          </Text>
+        </Card>
+      ) : null}
+
+      {status === 'LOADING' ? (
         <View style={styles.loadingBanner}>
-          <Text style={styles.loadingText}>⏳ Memproses respons keselamatan Anda...</Text>
+          <Spinner size={18} color={colors.primary} />
+          <Text style={styles.loadingText}>Memproses respons keselamatan Anda…</Text>
         </View>
-      )}
+      ) : null}
 
-      {/* STATE 3: RESOLVED SAFE */}
-      {status === 'RESOLVED_SAFE' && (
+      {status === 'RESOLVED_SAFE' ? (
         <View style={styles.safeResultBanner}>
-          <Text style={styles.safeTitle}>✅ Kondisi Aman Terkonfirmasi!</Text>
+          <CheckCircle2Icon size={24} color={colors.success} />
+          <Text style={styles.safeTitle}>Kondisi aman terkonfirmasi</Text>
           <Text style={styles.safeDesc}>
-            Terima kasih telah merespons ({resolvedTime}). Eskalasi darurat ke keluarga dan tenaga medis telah dibatalkan secara otomatis.
+            Terima kasih telah merespons ({resolvedTime}). Eskalasi darurat ke keluarga dan tenaga
+            medis dibatalkan otomatis.
           </Text>
-          <View style={{ marginTop: 12 }}>
-            <TouchableOpacity onPress={handleResetDemo} style={styles.resetButton}>
-              <Text style={styles.resetButtonText}>Ulangi Simulasi Demo</Text>
-            </TouchableOpacity>
-          </View>
+          <BigButton
+            label="Ulangi simulasi demo"
+            variant="secondary"
+            icon={<RotateCcwIcon size={18} color={colors.textSecondary} />}
+            onPress={handleResetDemo}
+          />
         </View>
-      )}
+      ) : null}
 
-      {/* STATE 4: ESCALATED / TIMEOUT */}
-      {status === 'ESCALATED' && (
+      {status === 'ESCALATED' ? (
         <View style={styles.escalatedBanner}>
-          <Text style={styles.escalatedTitle}>⚠️ Peringatan Darurat Terkirim!</Text>
+          <TriangleAlertIcon size={24} color={colors.danger} />
+          <Text style={styles.escalatedTitle}>Peringatan darurat terkirim</Text>
           <Text style={styles.escalatedDesc}>
-            Waktu konfirmasi habis atau bantuan diminta. Notifikasi darurat dan koordinat lokasi telah diteruskan ke keluarga dan fasilitas kesehatan.
+            Waktu konfirmasi habis atau bantuan diminta. Notifikasi darurat dan koordinat lokasi
+            telah diteruskan ke keluarga dan fasilitas kesehatan.
           </Text>
 
-          {/* TOMBOL PANGGIL 112 (ONE-TAP MANUAL CALL — AC-4.6, BUKAN AUTO-DIAL) */}
-          <View style={styles.callSection}>
+          {/* Tombol 112 hanya muncul pada insiden yang benar-benar aktif. Hard
+              constraint: panggilan tetap manual, tidak ada auto-dial. */}
+          {emergencyId ? (
             <BigButton
-              label="📞 Panggil 112 (Ambulans/Polisi)"
-              color="#DC2626"
+              label="Panggil 112 (Ambulans/Polisi)"
+              variant="danger"
+              size="lg"
+              icon={<PhoneCallIcon size={22} color={colors.danger} />}
               onPress={handleCall112}
-              style={styles.emergencyCallButton}
-              accessibilityHint="Panggilan manual ke nomor darurat 112"
             />
-            <Text style={styles.callExplanation}>
-              🔒 Tombol 112 adalah panggilan manual satu-sentuhan (one-tap call). Sistem tidak pernah memulai panggilan telepon secara otomatis.
-            </Text>
-          </View>
+          ) : null}
+          <Text style={styles.callExplanation}>
+            Tombol 112 adalah panggilan manual satu-sentuhan (one-tap call). Sistem tidak pernah
+            memulai panggilan telepon secara otomatis.
+          </Text>
 
-          <View style={{ marginTop: 16 }}>
-            <TouchableOpacity onPress={handleResetDemo} style={styles.resetButton}>
-              <Text style={styles.resetButtonText}>Ulangi Simulasi Demo</Text>
-            </TouchableOpacity>
-          </View>
+          <BigButton
+            label="Ulangi simulasi demo"
+            variant="secondary"
+            icon={<RotateCcwIcon size={18} color={colors.textSecondary} />}
+            onPress={handleResetDemo}
+          />
         </View>
-      )}
+      ) : null}
 
-      {/* STATE 5: ERROR */}
-      {status === 'ERROR' && (
+      {status === 'ERROR' ? (
         <View style={styles.errorBanner}>
-          <Text style={styles.errorTitle}>❌ Gagal Mengirim Respons</Text>
+          <TriangleAlertIcon size={22} color={colors.danger} />
+          <Text style={styles.errorTitle}>Gagal mengirim respons</Text>
           <Text style={styles.errorDesc}>{errorMessage}</Text>
-          <View style={{ marginTop: 12, gap: 8 }}>
-            <BigButton label="Coba Lagi" color="#4B5563" onPress={handleSafe} />
-            <BigButton
-              label="📞 Panggil 112"
-              color="#DC2626"
-              onPress={handleCall112}
-            />
+          <View style={styles.buttonStack}>
+            <BigButton label="Coba lagi" variant="secondary" onPress={handleSafe} />
+            {emergencyId ? (
+              <BigButton
+                label="Panggil 112"
+                variant="danger"
+                size="lg"
+                icon={<PhoneCallIcon size={20} color={colors.danger} />}
+                onPress={handleCall112}
+              />
+            ) : null}
           </View>
         </View>
-      )}
+      ) : null}
 
-      <Text style={styles.footerNote}>
-        ID Insiden Darurat: {emergencyId}
-      </Text>
+      {emergencyId ? (
+        <Text style={styles.footerNote}>ID Insiden Darurat: {emergencyId}</Text>
+      ) : null}
     </ScrollView>
   )
 }
@@ -408,113 +440,95 @@ export function EmergencyScreen({
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: '#FAFAF9',
-    padding: 20,
-    justifyContent: 'center',
-    gap: 16,
+    padding: spacing.lg,
+    gap: spacing.lg,
   },
   header: {
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  emergencyBadge: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#F87171',
-    marginBottom: 6,
-  },
-  emergencyBadgeText: {
-    color: '#991B1B',
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    gap: spacing.sm,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: '#1C1917',
-    letterSpacing: -0.5,
+    ...typography.display,
+    color: colors.text,
+    letterSpacing: -0.6,
   },
   subtitle: {
-    fontSize: 15,
-    color: '#78716C',
-    marginTop: 2,
+    ...typography.body,
+    color: colors.textMuted,
   },
   deepLinkBanner: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#3B82F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primarySoftest,
+    borderColor: colors.border,
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
+    borderRadius: radius.md,
+    padding: spacing.md,
   },
   deepLinkText: {
-    fontSize: 14,
+    ...typography.bodySmall,
     fontWeight: '600',
-    color: '#1D4ED8',
-    textAlign: 'center',
+    color: colors.primary,
+    flex: 1,
   },
   card: {
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1.5,
-    gap: 12,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    gap: spacing.md,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: colors.text,
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.08,
         shadowRadius: 6,
       },
-      android: {
-        elevation: 3,
-      },
+      android: { elevation: 3 },
     }),
   },
   cardDefault: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E7E5E4',
+    backgroundColor: colors.surface,
+    borderColor: colors.borderSoft,
   },
   cardAlert: {
-    backgroundColor: '#FFF1F2',
-    borderColor: '#F43F5E',
+    backgroundColor: colors.dangerSurface,
+    borderColor: colors.danger,
   },
   pulseRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
   },
-  pulseIcon: {
-    fontSize: 36,
+  pulseText: {
+    flexShrink: 1,
+    gap: 2,
   },
   cardHeaderTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#78716C',
+    ...typography.label,
+    color: colors.textMuted,
     textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
-  hrValueText: {
+  hrValue: {
+    ...typography.h1,
     fontSize: 28,
-    fontWeight: '900',
-    color: '#E11D48',
+    fontWeight: '700',
+    color: colors.danger,
   },
   bpmUnit: {
+    ...typography.h2,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#BE123C',
+    color: colors.danger,
   },
   cardExplanation: {
-    fontSize: 14,
-    color: '#44403C',
-    lineHeight: 20,
+    ...typography.bodySmall,
+    color: colors.textSecondary,
   },
   locationContainer: {
-    backgroundColor: '#F5F5F4',
-    borderRadius: 12,
-    padding: 12,
-    gap: 6,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
   },
   locationHeaderRow: {
     flexDirection: 'row',
@@ -522,196 +536,135 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   locationTitle: {
+    ...typography.label,
     fontSize: 13,
-    fontWeight: '700',
-    color: '#44403C',
+    color: colors.textSecondary,
   },
   refreshLocButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minHeight: 44,
+    paddingHorizontal: spacing.sm,
   },
   refreshLocText: {
+    ...typography.bodySmall,
     fontSize: 12,
     fontWeight: '600',
-    color: '#2563EB',
+    color: colors.primary,
   },
   locationDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 6,
+    gap: spacing.xs,
   },
   locationCoords: {
-    fontSize: 14,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    ...typography.body,
+    fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
     fontWeight: '700',
-    color: '#1C1917',
+    color: colors.text,
   },
   mapsLink: {
-    fontSize: 13,
+    ...typography.bodySmall,
     fontWeight: '700',
-    color: '#2563EB',
-    textDecorationLine: 'underline',
-  },
-  locationFallback: {
-    fontSize: 13,
-    fontStyle: 'italic',
-    color: '#78716C',
-  },
-  confirmSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#E7E5E4',
-    alignItems: 'center',
-    gap: 14,
-  },
-  timerBadge: {
+    color: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#F59E0B',
+    gap: spacing.xs,
   },
-  timerLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#92400E',
-  },
-  timerSeconds: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#B45309',
-  },
-  progressBarBackground: {
-    width: '100%',
-    height: 8,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#F59E0B',
-    borderRadius: 4,
+  locationFallback: {
+    ...typography.bodySmall,
+    fontSize: 13,
+    fontStyle: 'italic',
+    color: colors.textMuted,
   },
   questionText: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#1C1917',
+    ...typography.h1,
+    fontWeight: '700',
+    color: colors.text,
     textAlign: 'center',
-    marginTop: 4,
   },
   buttonStack: {
-    width: '100%',
-    gap: 12,
+    gap: spacing.md,
   },
   subtext: {
-    fontSize: 12,
-    color: '#78716C',
+    ...typography.bodySmall,
+    fontSize: 13,
+    color: colors.textMuted,
     textAlign: 'center',
-    lineHeight: 18,
   },
   loadingBanner: {
-    backgroundColor: '#E0F2FE',
-    borderRadius: 16,
-    padding: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primarySoftest,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
   },
   loadingText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0369A1',
+    ...typography.body,
+    fontWeight: '600',
+    color: colors.primary,
   },
   safeResultBanner: {
-    backgroundColor: '#DCFCE7',
-    borderColor: '#16A34A',
-    borderWidth: 2,
-    borderRadius: 20,
-    padding: 20,
-    gap: 8,
+    backgroundColor: colors.successSurface,
+    borderColor: colors.successBorder,
+    borderWidth: 1,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    gap: spacing.md,
   },
   safeTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#14532D',
+    ...typography.h1,
+    color: colors.success,
   },
   safeDesc: {
-    fontSize: 15,
-    color: '#166534',
-    lineHeight: 22,
+    ...typography.bodySmall,
+    color: colors.success,
   },
   escalatedBanner: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#DC2626',
-    borderWidth: 2,
-    borderRadius: 20,
-    padding: 20,
-    gap: 12,
+    backgroundColor: colors.dangerSurface,
+    borderColor: colors.danger,
+    borderWidth: 1,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    gap: spacing.md,
   },
   escalatedTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#991B1B',
+    ...typography.h1,
+    color: colors.danger,
   },
   escalatedDesc: {
-    fontSize: 15,
-    color: '#B91C1C',
-    lineHeight: 22,
-  },
-  callSection: {
-    marginTop: 8,
-    gap: 8,
-  },
-  emergencyCallButton: {
-    minHeight: 64,
+    ...typography.bodySmall,
+    color: colors.danger,
   },
   callExplanation: {
-    fontSize: 12,
-    color: '#7F1D1D',
+    ...typography.bodySmall,
+    fontSize: 13,
+    color: colors.danger,
     textAlign: 'center',
-    lineHeight: 16,
-  },
-  resetButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  resetButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#374151',
   },
   errorBanner: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#EF4444',
-    borderWidth: 1.5,
-    borderRadius: 16,
-    padding: 16,
-    gap: 8,
+    backgroundColor: colors.dangerSurface,
+    borderColor: colors.dangerBorder,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
   },
   errorTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#991B1B',
+    ...typography.h2,
+    color: colors.danger,
   },
   errorDesc: {
-    fontSize: 14,
-    color: '#B91C1C',
+    ...typography.bodySmall,
+    color: colors.danger,
   },
   footerNote: {
-    fontSize: 11,
-    color: '#A8A29E',
+    ...typography.bodySmall,
+    fontSize: 12,
+    color: colors.textMuted,
     textAlign: 'center',
-    marginTop: 4,
   },
 })

@@ -1,4 +1,4 @@
-import type { UserRole } from '../enums'
+import type { NakesRole, UserRole } from '../enums'
 
 export interface ApiErrorBody {
   error: {
@@ -20,6 +20,13 @@ export interface ApiResponse<T> {
 export interface AuthUserClaims {
   sub: string
   role: UserRole
+  /**
+   * Peran klinis untuk akun NAKES. Menggantikan pengecekan berbasis nama/heuristik:
+   * kewenangan menyetujui resep & ambang detak jantung dibaca dari sini
+   * (docs/API.md §3.2). Mengikuti masa berlaku token, jadi perubahan peran baru
+   * berlaku setelah nakes login ulang.
+   */
+  nakesRole?: NakesRole
   patientId?: string
   scope?: string
 }
@@ -28,6 +35,7 @@ export interface AuthUserClaims {
 export interface AuthSessionUser {
   id: string
   role: UserRole
+  nakesRole?: NakesRole
   fullName: string
   isVerified: boolean
 }

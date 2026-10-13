@@ -1,6 +1,11 @@
 # UI/UX — User Flow, Wireframe & Design System
 
-**Versi:** 1.0 · **Terkait:** [PRD.md](PRD.md) (persona), [API.md](API.md)
+**Versi:** 1.1 · **Terkait:** [PRD.md](PRD.md) (persona), [API.md](API.md)
+
+> **v1.1** — Design system diimplementasikan sepenuhnya. Palet berubah dari
+> cyan (`primary #0E7490`) ke satu keluarga hijau (`primary #176b4d`); aplikasi
+> menjadi mode terang saja; ikon memakai `lucide`; grafik memakai Recharts.
+> Lihat [§6](#6-design-system) untuk token dan lokasi implementasinya.
 
 Tujuan desain CareLoop: **"Tidak perlu dipelajari."** Target utama adalah lansia 60+ dengan keterbatasan membaca/penglihatan dan keluarga yang sibuk. Prinsip: interaksi minimum, teks besar, kontras tinggi, pilihan sedikit, dan kanal yang sudah familiar (WhatsApp).
 
@@ -367,62 +372,132 @@ Progress: ●●●○
 
 ## 6. Design System
 
+Implementasi nyata ada di dua tempat, dan keduanya wajib dijaga sinkron:
+
+- **Web (dashboard nakes)** — `apps/web/src/app/globals.css`. Seluruh token warna,
+  radius, dan bentuk komponenlive di situ (Tailwind v4 `@theme inline`).
+  Sumber kebenaran tunggal; **dilarang** menulis warna hex atau palet Tailwind
+  mentah (`bg-zinc-*`, `text-emerald-*`) langsung di komponen.
+- **Mobile (apps pasien)** — `apps/mobile/src/theme/tokens.ts`. Cerminan literal
+  dari blok `:root` di `globals.css`.
+
+Aplikasi hanya berjalan dalam **mode terang**. Tidak ada varian `dark:`.
+
 ### 6.1 Warna
+
+Satu keluarga hijau untuk brand, netral, dan permukaan. Amber dan merah tetap
+sebagai warna keselamatan — keduanya bukan warna brand dan tidak pernah dipakai
+dekoratif.
+
+#### Inti (dari `globals.css` `:root`)
 
 | Token | Hex | Penggunaan |
 |---|---|---|
-| `primary` | `#0E7490` (cyan-700) | Aksi utama, tautan, brand |
-| `primary-dark` | `#155E75` | Hover/press |
-| `success` | `#16A34A` (green-600) | Konfirmasi, "Sudah Minum", aman |
-| `warning` | `#D97706` (amber-600) | Perhatian, tunda, mendekati timeout |
-| `danger` | `#DC2626` (red-600) | Darurat, panggil 112, alert aktif |
-| `background` | `#FAFAF9` | Layar terang (bukan putih murni — kurangi silau) |
-| `surface` | `#FFFFFF` | Kartu |
-| `text` | `#1C1917` (stone-900) | Teks utama |
-| `text-muted` | `#57534E` (stone-600) | Teks sekunder (≥ 4.5:1 di background) |
-| `text-on-primary` | `#FFFFFF` | Teks di atas primary |
+| `--background` | `#f4f6ee` | Latar aplikasi — hijau sangat pucat, bukan putih murni (kurangi silau) |
+| `--foreground` | `#15352a` | Teks utama |
+| `--card` | `#ffffff` | Permukaan kartu |
+| `--primary` | `#176b4d` | Aksi utama, tautan, brand |
+| `--primary-foreground` | `#ffffff` | Teks di atas `primary` |
+| `--secondary` | `#e4ebdf` | Permukaan sekunder |
+| `--muted` | `#ebf0e7` | Latar input & track |
+| `--muted-foreground` | `#5f7268` | Teks sekunder (≥ 4.5:1 di atas `background`) |
+| `--accent` | `#e1ecd9` | Permukaan hover / pilihan |
+| `--border` | `#d4dfd1` | Garis 1px |
+| `--ring` | `#176b4d` | Cincin fokus |
+| `--signal` | `#4d9e6f` | Aksen langka: satu aksi atau satu angka penting |
 
-> Dark mode: opsional, **tidak** menjadi prioritas MVP. Pastikan mode terang memenuhi AA.
+#### Kelompok semantik (tiga token per keluarga)
+
+| Keluarga | Nilai | `--*-surface` | `--*-border` |
+|---|---|---|---|
+| `success` | `#12603c` | `#e4f4e9` | `#a8d5b9` |
+| `warning` | `#7a5209` | `#fdf3e0` | `#ecd09a` |
+| `info` | `#2b6f57` | `#e8f0e4` | `#c5d9c2` |
+| `notice` | `#244c3d` | `#e4ebdf` | `#cbdcc5` |
+| `danger` | `#b83e34` | `#fcecea` | `#eeb4ad` |
+| `neutral` | `#4a5a52` | `#f1f3f1` | `#d8ded9` |
+
+> Pola `X` / `X-surface` / `X-border` dipakai seragam oleh `Badge`, `Alert`,
+> `StatusBadge` (web dan mobile), dan `toneSurface` di `tokens.ts`.
+
+#### Grafik
+
+`--chart-1..5` = `#176b4d`, `#4d9e6f`, `#86b39c`, `#b0882e`, `#c05a4c`.
+Empat seri pertama dalam keluarga hijau; amber & merah hanya untuk status
+peringatan/darurat pada grafik.
 
 ### 6.2 Tipografi
 
+Web: Geist Sans / Geist Mono (dimuat lewat `next/font/google`, token
+`--font-geist-sans` / `--font-geist-mono`).
+Mobile: stack sistem; ukuran mengikuti tabel di bawah.
+
 | Level | Ukuran | Weight | Keterangan |
 |---|---|---|---|
-| Display | 28–32px | 700 | Halaman darurat |
-| H1 | 24px | 700 | Judul layar |
-| H2 | 20px | 600 | Judul kartu |
-| Body | 18px | 400 | Konten utama (≥ 16px minimum) |
-| Body-small | 16px | 400 | Metadata |
-| Button | 20px | 700 | Label tombol |
-| Peringatan | 20px | 800 | Teks alert darurat |
+| Display | 30px | 700 | Judul layar (mobile) |
+| H1 | 24px | 700 | Judul kartu / subjudul |
+| H2 | 20px | 600 | Judul bagian |
+| Body | 17px | 400 | Konten utama (≥ 16px minimum) |
+| Body-small | 15px | 400 | Metadata |
+| Button | 17px | 700 | Label tombol (20px untuk tombol darurat) |
 
-- Font: system stack + aksara Latin (interop dengan teks Indonesia). `font-family: ui-rounded, system-ui, -apple-system, sans-serif` untuk nuansa ramah. Hindari font script.
+Angka tabular dipakai di seluruh aplikasi (`font-variant-numeric: tabular-nums`)
+supaya kolom KPI dan tabel sejajar.
 
-### 6.3 Spacing & Radius
+### 6.3 Spacing, Radius & Gerak
 
-- Grid: 4px base. Spacing: 4/8/12/16/24/32.
-- Radius tombol: 12px (besar & mudah dikenali).
-- Target sentuh: ≥ 48×48; tombol darurat ≥ 64×64.
+- Grid 4px base. Spacing: 4 / 8 / 12 / 16 / 24 / 32.
+- **Radius** berasal dari satu token `--radius: 0.9rem` (14.4px) dengan
+  pengali: `sm` ×0.6, `md` ×0.8, `lg` ×1, `xl` ×1.4, `2xl` ×1.8, `3xl` ×2.2,
+  `4xl` ×2.6. Kartu memakai `1.35rem`; shell/panel `26px`.
+- **Target sentuh** ≥ 48×48 (tombol web minimal 44px = `2.75rem`);
+  tombol darurat 64×64.
+- **Easing** tunggal: `cubic-bezier(0.22, 1, 0.36, 1)`.
+  Durasi: kontrol 180–200ms, kartu 240ms, meter 320ms, shell 620ms,
+  entrance 620–700ms.
+- Semua efek hover/animasi dibungkus
+  `@media (hover: hover) and (prefers-reduced-motion: no-preference)`;
+  ada guard global `prefers-reduced-motion: reduce`.
 
 ### 6.4 Komponen
 
-| Komponen | Spesifikasi |
-|---|---|
-| `PrimaryButton` | tinggi 56px, radius 12, bg `primary`, teks putih 20px bold, label aksi (VERB) |
-| `DangerButton` | sama tapi bg `danger`; untuk aksi darurat |
-| `SuccessButton` | bg `success`; konfirmasi "Saya aman"/"Sudah minum" |
-| `Card` | surface, radius 16, shadow halus |
-| `AlertBanner` | sticky top, bg `danger` 10% + border kiri `danger` |
-| `ProgressBar` | timeout darurat; tinggi 12px; warna berubah green→amber→red |
-| `ChipFilter` | filter dashboard (puskesmas, penyakit, tanggal) |
-| `LineChart` / `BarChart` | Recharts, aksesibel (label, tooltip) |
-| `Skeleton` | loading state halus (dashboard) |
+Primitif web ada di `apps/web/src/components/ui/`, selebihnya di
+`apps/web/src/components/`. Mobile di `apps/mobile/src/components/`.
+
+| Komponen | Lokasi | Spesifikasi |
+|---|---|---|
+| `Button` | `ui/button` | Varian `default / outline / secondary / ghost / destructive / success / link`; ukuran `xs / sm / default / lg / icon` |
+| `Badge` | `ui/badge` | Varian semantik: `default / secondary / success / warning / info / neutral / destructive / outline / ghost` |
+| `Card` | `ui/card` | Radius 1.35rem, border 1px, bayangan bernuansa hijau |
+| `Alert` | `ui/feedback` | Empat keparahan (`info / success / warning / danger`) |
+| `Skeleton` | `ui/feedback` | Placeholder saat memuat |
+| `Input` / `Label` / `NativeSelect` | `ui/input` | Min tinggi 2.75rem; fokus memakai `ring` primary |
+| `Dialog` / `Sheet` | `ui/dialog`, `ui/sheet` | Sheet dibangun di atas Radix `Dialog`; dipakai untuk drawer navigasi mobile-web |
+| `DropdownMenu` | `ui/dropdown-menu` | Menu akun di navbar |
+| `Tabs` | `ui/tabs` | Pilar bergaya pil pada halaman detail pasien |
+| `Table` | `ui/table` | Primitif tabel; tampilan "lembar" dipakai lewat `DataTableShell` |
+| `StatCard` | `components/stat-card` | Token `--stat-accent` + `data-tone`; sudut tekukan kertas (`.card-fold`); `SpotlightCard` untuk cahaya kursor |
+| `DataTableShell` | `components/data-table` | Toolbar + header lengket + zebra + bar hover kolom pertama |
+| `Meter` | `components/data-table` | Meter progres dengan penanda ujung, warna hijau → amber → merah |
+| `PageHeader` | `components/page-header` | Kicker + judul + deskripsi + aksi; satu per halaman |
+| `AppShell` + `Topbar` | `components/shell/` | Navbar penuh sticky (bukan sidebar) + konten `max-w-[1440px]` |
+| `PrimaryButton` / `DangerButton` / `SuccessButton` | `components/BigButton` (mobile) | Min tinggi 48px; varian darurat 64px |
+| `ProgressBar` | `components/feedback` (mobile) | Timeout darurat; tinggi 10px |
+| `ChipFilter` | `components/feedback` (mobile) | Filter cepat |
+| `LineChart` / `AreaChart` | `dashboard/adherence-chart` | Recharts, aksesibel (label sumbu + tooltip) |
+| `EmergencyCallButton` | `BigButton` varian `danger` | `tel:112`, besar, **tidak** auto-dial |
 | `WhatsAppButton` | mapping tombol WA → action id `CONFIRM_TAKEN_<scheduleId>` |
-| `EmergencyCallButton` | `tel:112`, besar, tidak auto-dial |
 
 ### 6.5 Ikon
 
-- Ikon garis tebal (24px stroke) + label teks. Gunakan ikon konsisten (Lucide/React Native vector icons). Ikon + teks selalu.
+- **Hanya `lucide-react`** (web) dan **`lucide-react-native`** (mobile).
+  Ikon bergaya garis 24px dengan sufiks `*Icon`, dan **selalu** berpasangan dengan
+  label teks.
+- **Tidak ada emoji sebagai ikon** di mana pun, dan tidak ada SVG yang
+  di-inline manual di dalam komponen. Logo CareLoop adalah satu-satunya
+  ilustrasi, di `components/brand.tsx`.
+- Ukuran ikon dikendalikan per komponen lewat selektor `[&_svg]`, bukan
+  per pemakaian.
 
 ### 6.6 Bahasa & Tone
 

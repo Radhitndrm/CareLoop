@@ -1,56 +1,92 @@
-import React, { useState, useEffect } from 'react'
-import {
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
+import React, { useEffect, useMemo, useState } from 'react'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { CheckCircle2Icon, LinkIcon, PillIcon, TriangleAlertIcon } from 'lucide-react'
 import { BigButton } from '../components/BigButton'
+import { Card } from '../components/Card'
+import { IconWell, StatusBadge } from '../components/feedback'
+import { colors, radius, spacing, typography } from '../theme/tokens'
 import {
   confirmCompliance,
-  ComplianceConfirmResponseData,
+  getMySchedules,
+  type ComplianceConfirmResponseData,
+  type OwnSchedule,
 } from '../services/api'
 
 export interface ConfirmScreenProps {
+  /** Jadwal dari server. Kalau kosong, layar menampilkan daftar milik pasien sendiri. */
+  schedule?: OwnSchedule | null
   initialScheduleId?: string
-  medicationName?: string
-  instruction?: string
-  scheduleTime?: string
   isFromDeepLink?: boolean
   onSuccess?: (result: ComplianceConfirmResponseData) => void
 }
 
-// Default dummy UUID yang valid untuk keperluan demo
-const DEFAULT_SCHEDULE_ID = '11111111-1111-4111-8111-111111111111'
-const EMERGENCY_PHONE = 'tel:112'
-
 export function ConfirmScreen({
+  schedule,
   initialScheduleId,
-  medicationName = 'Metformin 500 mg',
-  instruction = '1 tablet setelah sarapan pagi',
-  scheduleTime = '08:00 WIB',
   isFromDeepLink = false,
   onSuccess,
 }: ConfirmScreenProps) {
-  const [scheduleId, setScheduleId] = useState<string>(
-    initialScheduleId || DEFAULT_SCHEDULE_ID
-  )
+  // Tidak ada lagi UUID dummy: jadwal selalu berasal dari server milik pasien yang
+  // sedang login. Mengonfirmasi jadwal orang lain tidak mungkin karena ID-nya tidak
+  // pernah di-hardcode di aplikasi.
+  const [scheduleId, setScheduleId] = useState<string>(initialScheduleId ?? '')
   const [status, setStatus] = useState<'IDLE' | 'LOADING' | 'SUCCESS' | 'ERROR'>('IDLE')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [confirmedTime, setConfirmedTime] = useState<string | null>(null)
+  const [schedules, setSchedules] = useState<OwnSchedule[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Jadwal milik pasien yang sedang login. Ganti deep link kalau ID-nya berbeda.
+  const active = useMemo(
+    () =>
+      schedules.find((item) => item.id === scheduleId) ??
+      schedule ??
+      schedules[0] ??
+      null,
+    [schedules, scheduleId, schedule],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchSchedules() {
+      setIsLoading(true)
+      try {
+        const result = await getMySchedules()
+        if (!cancelled) setSchedules(result)
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setErrorMessage(
+            err instanceof Error ? err.message : 'Gagal memuat jadwal obat',
+          )
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    void fetchSchedules()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (initialScheduleId && initialScheduleId !== scheduleId) {
       setScheduleId(initialScheduleId)
-      // Reset status jika schedule ID berubah via deep link
+      // Status direset karena jadwal yang dikonfirmasi memang berbeda.
       setStatus('IDLE')
       setErrorMessage(null)
       setConfirmedTime(null)
     }
-  }, [initialScheduleId])
+  }, [initialScheduleId, scheduleId])
 
   const handleConfirm = async () => {
+    if (!scheduleId) {
+      setStatus('ERROR')
+      setErrorMessage('Belum ada jadwal obat yang bisa dikonfirmasi.')
+      return
+    }
     setStatus('LOADING')
     setErrorMessage(null)
 
@@ -78,80 +114,121 @@ export function ConfirmScreen({
     }
   }
 
-  const handleCallEmergency = () => {
-    Linking.openURL(EMERGENCY_PHONE)
-  }
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>CareLoop</Text>
-        <Text style={styles.subtitle}>Kepatuhan Obat &amp; Bantuan Darurat</Text>
+        <StatusBadge label="Jadwal obat" tone="primary" icon={<PillIcon size={14} color={colors.primary} />} />
+        <Text style={styles.title}>Waktunya minum obat</Text>
+        <Text style={styles.subtitle}>
+          Satu ketukan untuk mengonfirmasi. Kalau tidak, caregiver akan diberi tahu.
+        </Text>
       </View>
 
-      {/* Banner info deep link */}
-      {isFromDeepLink && (
+      {isFromDeepLink ? (
         <View style={styles.deepLinkBanner}>
-          <Text style={styles.deepLinkText}>
-            🔗 Terbuka dari tautan pengingat WhatsApp
-          </Text>
+          <LinkIcon size={16} color={colors.primary} />
+          <Text style={styles.deepLinkText}>Terbuka dari tautan pengingat WhatsApp</Text>
         </View>
-      )}
+      ) : null}
 
-      {/* Card informasi obat */}
-      <View style={styles.card}>
-        <Text style={styles.cardLabel}>Waktunya Minum Obat</Text>
-        <Text style={styles.medicationName}>{medicationName}</Text>
-        <Text style={styles.instruction}>{instruction}</Text>
-        <View style={styles.timeBadge}>
-          <Text style={styles.timeText}>⏰ {scheduleTime}</Text>
+      <Card>
+        <View style={styles.medRow}>
+          <IconWell tone="primary">
+            <PillIcon size={20} color={colors.primary} />
+          </IconWell>
+          <View style={styles.medText}>
+            <Text style={styles.cardLabel}>Obat</Text>
+            <Text style={styles.medicationName}>{active?.medicationName ?? 'Memuat…'}</Text>
+          </View>
         </View>
-        <Text style={styles.scheduleIdText}>ID Jadwal: {scheduleId}</Text>
-      </View>
 
-      {/* Banner status hasil konfirmasi */}
-      {status === 'SUCCESS' && (
+        <Text style={styles.instruction}>{active?.doseQty}</Text>
+        {active?.instructions ? (
+          <Text style={styles.instruction}>{active.instructions}</Text>
+        ) : null}
+        {active?.dosage ? <Text style={styles.instruction}>{active.dosage}</Text> : null}
+
+        <StatusBadge
+          label={active ? `Waktu ${active.timeOfDay}` : '—'}
+          tone="neutral"
+          icon={<PillIcon size={13} color={colors.neutral} />}
+        />
+      </Card>
+
+      {status === 'SUCCESS' ? (
         <View style={styles.successBanner}>
-          <Text style={styles.successTitle}>✅ Obat Berhasil Dikonfirmasi!</Text>
-          <Text style={styles.successDesc}>
-            Terima kasih telah minum obat tepat waktu ({confirmedTime}). Eskalasi darurat otomatis dibatalkan.
-          </Text>
+          <CheckCircle2Icon size={22} color={colors.success} />
+          <View style={styles.bannerText}>
+            <Text style={styles.successTitle}>Obat berhasil dikonfirmasi</Text>
+            <Text style={styles.successDesc}>
+              Terima kasih sudah minum tepat waktu ({confirmedTime}). Eskalasi otomatis dibatalkan.
+            </Text>
+          </View>
         </View>
-      )}
+      ) : null}
 
-      {status === 'ERROR' && (
+      {status === 'ERROR' ? (
         <View style={styles.errorBanner}>
-          <Text style={styles.errorTitle}>❌ Konfirmasi Gagal</Text>
-          <Text style={styles.errorDesc}>{errorMessage}</Text>
-          <Text style={styles.retryHint}>Silakan tekan tombol di bawah untuk mencoba kembali.</Text>
+          <TriangleAlertIcon size={22} color={colors.danger} />
+          <View style={styles.bannerText}>
+            <Text style={styles.errorTitle}>Konfirmasi gagal</Text>
+            <Text style={styles.errorDesc}>{errorMessage}</Text>
+            <Text style={styles.retryHint}>Tekan tombol di bawah untuk mencoba kembali.</Text>
+          </View>
         </View>
-      )}
+      ) : null}
 
-      {/* Tombol aksi utama */}
+      {!isLoading && schedules.length === 0 ? (
+        <Card>
+          <Text style={styles.instruction}>
+            Belum ada jadwal obat aktif. Jadwal akan muncul setelah dokter menyetujui resep
+            Anda di Puskesmas.
+          </Text>
+        </Card>
+      ) : null}
+
+      {schedules.length > 1 ? (
+        <Card>
+          <Text style={styles.cardLabel}>Jadwal Anda</Text>
+          {schedules.map((item) => (
+            <BigButton
+              key={item.id}
+              label={`${item.timeOfDay} — ${item.medicationName}`}
+              variant={item.id === active?.id ? 'primary' : 'outline'}
+              onPress={() => {
+                setScheduleId(item.id)
+                setStatus('IDLE')
+                setErrorMessage(null)
+                setConfirmedTime(null)
+              }}
+            />
+          ))}
+        </Card>
+      ) : null}
+
       <View style={styles.actionGroup}>
         {status === 'SUCCESS' ? (
           <BigButton
-            label="✓ Sudah Dikonfirmasi"
-            color="#059669"
-            disabled={true}
+            label="Sudah dikonfirmasi"
+            variant="success"
+            icon={<CheckCircle2Icon size={18} color={colors.textOnPrimary} />}
+            disabled
             onPress={() => {}}
           />
         ) : (
           <BigButton
-            label={status === 'LOADING' ? 'Mengonfirmasi...' : '💊 Sudah Minum'}
-            color="#16A34A"
-            loading={status === 'LOADING'}
+            label={status === 'LOADING' ? 'Mengonfirmasi…' : 'Sudah minum'}
+            variant="primary"
+            icon={<PillIcon size={18} color={colors.textOnPrimary} />}
+            isLoading={status === 'LOADING'}
             onPress={handleConfirm}
           />
         )}
 
-        <BigButton
-          label="📞 Panggil 112"
-          color="#DC2626"
-          onPress={handleCallEmergency}
-        />
         <Text style={styles.note}>
-          Tombol 112 adalah panggilan manual one-tap, bukan auto-dial.
+          Panggilan darurat 112 hanya tersedia di layar darurat. Di layar ini tidak ada tombol
+          telepon sama sekali.
         </Text>
       </View>
     </ScrollView>
@@ -161,135 +238,111 @@ export function ConfirmScreen({
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: '#FAFAF9',
-    padding: 24,
-    justifyContent: 'center',
-    gap: 18,
+    padding: spacing.lg,
+    gap: spacing.lg,
   },
   header: {
-    marginBottom: 8,
+    gap: spacing.sm,
   },
   title: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: '#1C1917',
-    letterSpacing: -0.5,
+    ...typography.display,
+    color: colors.text,
+    letterSpacing: -0.6,
   },
   subtitle: {
-    fontSize: 18,
-    color: '#57534E',
-    marginTop: 4,
+    ...typography.body,
+    color: colors.textMuted,
   },
   deepLinkBanner: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#3B82F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primarySoftest,
+    borderColor: colors.border,
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: radius.md,
+    padding: spacing.md,
   },
   deepLinkText: {
-    fontSize: 16,
+    ...typography.bodySmall,
     fontWeight: '600',
-    color: '#1D4ED8',
-    textAlign: 'center',
+    color: colors.primary,
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 22,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#E7E5E4',
-    elevation: 3,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
+  medRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  medText: {
+    flexShrink: 1,
+    gap: 2,
   },
   cardLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#78716C',
+    ...typography.label,
+    color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   medicationName: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#1C1917',
+    ...typography.h1,
+    fontWeight: '700',
+    color: colors.text,
   },
   instruction: {
-    fontSize: 18,
-    color: '#44403C',
-    lineHeight: 24,
-  },
-  timeBadge: {
-    backgroundColor: '#F5F5F4',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginTop: 6,
-  },
-  timeText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#292524',
-  },
-  scheduleIdText: {
-    fontSize: 12,
-    color: '#A8A29E',
-    marginTop: 4,
+    ...typography.body,
+    color: colors.textSecondary,
   },
   successBanner: {
-    backgroundColor: '#DCFCE7',
-    borderColor: '#16A34A',
-    borderWidth: 2,
-    borderRadius: 16,
-    padding: 18,
-    gap: 6,
-  },
-  successTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#14532D',
-  },
-  successDesc: {
-    fontSize: 16,
-    color: '#166534',
-    lineHeight: 22,
+    flexDirection: 'row',
+    gap: spacing.md,
+    backgroundColor: colors.successSurface,
+    borderColor: colors.successBorder,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
   },
   errorBanner: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#DC2626',
-    borderWidth: 2,
-    borderRadius: 16,
-    padding: 18,
-    gap: 6,
+    flexDirection: 'row',
+    gap: spacing.md,
+    backgroundColor: colors.dangerSurface,
+    borderColor: colors.dangerBorder,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+  },
+  bannerText: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  successTitle: {
+    ...typography.h2,
+    color: colors.success,
+  },
+  successDesc: {
+    ...typography.bodySmall,
+    color: colors.success,
   },
   errorTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#7F1D1D',
+    ...typography.h2,
+    color: colors.danger,
   },
   errorDesc: {
-    fontSize: 16,
-    color: '#991B1B',
-    lineHeight: 22,
+    ...typography.bodySmall,
+    color: colors.danger,
   },
   retryHint: {
+    ...typography.bodySmall,
     fontSize: 14,
-    color: '#B91C1C',
+    color: colors.danger,
     fontStyle: 'italic',
   },
   actionGroup: {
-    marginTop: 8,
-    gap: 14,
+    gap: spacing.md,
   },
   note: {
+    ...typography.bodySmall,
     fontSize: 14,
-    color: '#78716C',
+    color: colors.textMuted,
     textAlign: 'center',
-    marginTop: 4,
   },
 })

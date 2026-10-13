@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useEffect, useState, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+import { LogInIcon, RefreshCwIcon, TriangleAlertIcon } from 'lucide-react'
 import type { DashboardFilterInput } from '@careloop/shared'
 import {
   getDashboardSummary,
@@ -11,13 +12,20 @@ import {
   type DashboardSummary,
   type DashboardAdherence,
   type AtRiskPatient,
-} from '../../lib/api'
-import { useAuth } from '../../lib/auth'
-import { KpiCards } from '../../components/dashboard/kpi-cards'
-import { AdherenceChart } from '../../components/dashboard/adherence-chart'
-import { RiskTable } from '../../components/dashboard/risk-table'
-import { FilterBar } from '../../components/dashboard/filter-bar'
-import { EmergencyPanel } from '../../components/dashboard/emergency-panel'
+} from '@/lib/api'
+import { useAuth } from '@/lib/auth'
+import { PageHeader } from '@/components/page-header'
+import { AccountCard } from '@/components/account-card'
+import { Button } from '@/components/ui/button'
+import { Alert, Skeleton } from '@/components/ui/feedback'
+import { HealthHero } from '@/components/dashboard/health-hero'
+import { StatStrip } from '@/components/dashboard/stat-strip'
+import { FilterTabs } from '@/components/dashboard/filter-tabs'
+import { EmergencyCard } from '@/components/dashboard/emergency-card'
+import { AdherenceTrendCard, DiseaseMetersCard } from '@/components/dashboard/adherence-chart'
+import { RiskTable } from '@/components/dashboard/risk-table'
+import { WorkQueuePanel } from '@/components/dashboard/work-queue-panel'
+import { CareTeamOnly } from '@/components/auth/care-team-only'
 
 function DashboardContent() {
   const searchParams = useSearchParams()
@@ -69,17 +77,17 @@ function DashboardContent() {
         }
       } catch (err: unknown) {
         if (!isCancelled) {
-          const msg =
+          setErrorMessage(
             err instanceof Error
               ? err.message
-              : 'Gagal memuat data dashboard. Periksa koneksi API atau token otorisasi.'
-          setErrorMessage(msg)
+              : 'Gagal memuat data dashboard. Periksa koneksi API atau token otorisasi.',
+          )
           setIsLoading(false)
         }
       }
     }
 
-    fetchData()
+    void fetchData()
 
     return () => {
       isCancelled = true
@@ -87,65 +95,90 @@ function DashboardContent() {
   }, [districtParam, diseaseParam, fromParam, toParam, escalationStatusParam, reloadKey, token])
 
   return (
-    <div className="space-y-6">
-      {/* Notifikasi Belum Login */}
-      {!authLoading && !isAuthenticated && (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">⚠️</span>
-            <p className="text-sm font-medium">
-              Anda belum masuk sebagai petugas Nakes/Admin. Anda dapat masuk untuk mengakses data ter-scope.
-            </p>
+    <>
+      <PageHeader
+        title="Ringkasan Monitoring"
+        description="Kepatuhan obat, risiko pasien, dan kegawatdaruratan dalam satu layar."
+        className="sm:items-start"
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            {errorMessage ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsLoading(true)
+                  setReloadKey((k) => k + 1)
+                }}
+              >
+                <RefreshCwIcon aria-hidden="true" />
+                Muat ulang
+              </Button>
+            ) : null}
+            <div data-dash="account" className="w-full sm:w-72">
+              <AccountCard />
+            </div>
           </div>
-          <Link
-            href="/login"
-            className="inline-flex items-center justify-center rounded-xl bg-amber-800 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
-          >
-            Masuk Sekarang
-          </Link>
-        </div>
-      )}
-
-      {/* Panel Peringatan Darurat Medis Real-Time (CL-212, AC-4.3, AC-4.5) */}
-      <EmergencyPanel />
-
-      {/* Filter Bar (FR-5.2, AC-5.2 bookmarkable) */}
-      <FilterBar
-        key={`${districtParam || ''}-${diseaseParam || ''}-${fromParam || ''}-${toParam || ''}-${escalationStatusParam || ''}`}
-        isLoading={isLoading}
+        }
       />
 
-      {/* Tampilan Error */}
-      {errorMessage && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-6 text-center dark:border-rose-900/50 dark:bg-rose-950/40">
-          <p className="text-sm font-semibold text-rose-800 dark:text-rose-300 mb-1">
-            Terjadi Kesalahan
-          </p>
-          <p className="text-xs text-rose-600 dark:text-rose-400 mb-4 max-w-md mx-auto">
-            {errorMessage}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setIsLoading(true)
-              setReloadKey((k) => k + 1)
-            }}
-            className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-500"
-          >
-            Coba Lagi
-          </button>
+      {!authLoading && !isAuthenticated ? (
+        <Alert variant="warning" icon={<TriangleAlertIcon />}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p>Masuk sebagai petugas Nakes/Admin untuk melihat data ter-scope.</p>
+            <Button asChild size="sm">
+              <Link href="/login">
+                <LogInIcon aria-hidden="true" />
+                Masuk sekarang
+              </Link>
+            </Button>
+          </div>
+        </Alert>
+      ) : null}
+
+      {errorMessage ? (
+        <Alert variant="danger" icon={<TriangleAlertIcon />}>
+          {errorMessage}
+        </Alert>
+      ) : null}
+
+      <FilterTabs isLoading={isLoading} />
+
+      {/*
+        Kolom utama membaca urut dari umum ke rinci: kondisi kepatuhan (hero),
+        lalu rincian per penyakit, lalu grafik tren. Kolom kanan — angka
+        pembuka dan darurat — dipin agar tetap terlihat sambil kolom utama
+        digulir, jadi tidak ada ruang kosong yang menggantung di bawahnya.
+      */}
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
+        <div className="flex min-w-0 flex-col gap-5 lg:col-span-8">
+          <div data-dash="hero"><HealthHero summary={summary} /></div>
+
+          <div data-dash="disease"><DiseaseMetersCard data={adherence} isLoading={isLoading} /></div>
+
+          <div data-dash="trend"><AdherenceTrendCard data={adherence} isLoading={isLoading} /></div>
         </div>
-      )}
 
-      {/* 1. Ringkasan KPI Cards */}
-      <KpiCards summary={summary} isLoading={isLoading} />
+        <div className="flex flex-col gap-5 lg:col-span-4">
+          <div className="sticky-cell flex flex-col gap-5">
+            <div data-dash="stats"><StatStrip summary={summary} /></div>
 
-      {/* 2. Grafik Tren Deret Waktu & Distribusi Penyakit */}
-      <AdherenceChart data={adherence} isLoading={isLoading} />
+            <div data-dash="emergency"><EmergencyCard /></div>
+          </div>
+        </div>
 
-      {/* 3. Tabel Daftar Pasien Berisiko Tinggi */}
-      <RiskTable patients={riskPatients} isLoading={isLoading} />
-    </div>
+        <div className="lg:col-span-12">
+          {/* Antrean kerja berada di atas tabel risiko: yang perlu dikerjakan hari ini
+              lebih penting daripada yang perlu dipantau. */}
+          <div data-dash="work-queue" className="mb-5">
+            <WorkQueuePanel />
+          </div>
+        </div>
+
+        <div className="lg:col-span-12">
+          <div data-dash="risk"><RiskTable patients={riskPatients} isLoading={isLoading} /></div>
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -153,20 +186,31 @@ export default function DashboardPage() {
   return (
     <Suspense
       fallback={
-        <div className="space-y-6">
-          <div className="h-32 w-full animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-800" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-28 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-800"
-              />
-            ))}
+        <div className="space-y-7">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-10 w-96" />
+          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
+            <div className="flex flex-col gap-5 lg:col-span-8">
+              <Skeleton className="h-72" />
+              <Skeleton className="h-72" />
+              <Skeleton className="h-96" />
+            </div>
+            <div className="flex flex-col gap-5 lg:col-span-4">
+              <div className="grid grid-cols-2 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-36" />
+                ))}
+              </div>
+              <Skeleton className="h-56" />
+            </div>
+            <Skeleton className="h-80 lg:col-span-12" />
           </div>
         </div>
       }
     >
-      <DashboardContent />
+      <CareTeamOnly>
+        <DashboardContent />
+      </CareTeamOnly>
     </Suspense>
   )
 }

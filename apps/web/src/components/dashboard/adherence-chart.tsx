@@ -1,7 +1,132 @@
-import type { DashboardAdherence } from '../../lib/api'
-import { Skeleton } from '../ui/skeleton'
+'use client'
 
-export function AdherenceChart({
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import { ActivityIcon, StethoscopeIcon, TrendingUpIcon } from 'lucide-react'
+import type { DashboardAdherence } from '@/lib/api'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/feedback'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Meter } from '@/components/data-table'
+
+function ChartTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: Array<{ value?: number; payload?: { confirmed?: number; total?: number } }>
+  label?: string
+}) {
+  if (!active || !payload?.length) return null
+  const point = payload[0]?.payload
+  return (
+    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-menu">
+      <p className="font-medium">{label}</p>
+      <p className="text-muted-foreground">
+        {Math.round((payload[0]?.value ?? 0) * 100)}% ({point?.confirmed ?? 0}/{point?.total ?? 0}{' '}
+        jadwal)
+      </p>
+    </div>
+  )
+}
+
+function TrendSkeleton() {
+  return (
+    <div className="rounded-xl bg-card p-6 ring-1 ring-foreground/10">
+      <Skeleton className="mb-4 h-5 w-48" />
+      <Skeleton className="h-72 w-full" />
+    </div>
+  )
+}
+
+export function AdherenceTrendCard({
+  data,
+  isLoading,
+}: {
+  data: DashboardAdherence | null
+  isLoading: boolean
+}) {
+  if (isLoading || !data) return <TrendSkeleton />
+
+  const chartData = (data.series ?? []).map((item) => ({
+    date: item.date.slice(5),
+    rate: Math.round(item.adherenceRate * 1000) / 10,
+    confirmed: item.confirmed,
+    total: item.total,
+  }))
+
+  return (
+    <Card data-reveal className="reveal h-full">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <TrendingUpIcon className="size-4 text-primary" aria-hidden="true" />
+          Tren Kepatuhan Harian
+        </CardTitle>
+        <CardDescription>
+          {data.period.from} s.d. {data.period.to} · persentase obat diminum tepat waktu
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {chartData.length === 0 ? (
+          <EmptyState
+            icon={<ActivityIcon className="size-5" aria-hidden="true" />}
+            title="Belum ada data jadwal"
+            description="Tidak ada jadwal obat pada periode tanggal yang dipilih. Coba perluas rentang tanggal."
+          />
+        ) : (
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="adherenceFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.28} />
+                    <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+                  axisLine={false}
+                  tickLine={false}
+                  minTickGap={16}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  ticks={[0, 25, 50, 75, 100]}
+                  tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v: number) => `${v}%`}
+                />
+                <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--border)' }} />
+                <Area
+                  type="monotone"
+                  dataKey="rate"
+                  stroke="var(--chart-1)"
+                  strokeWidth={2.5}
+                  fill="url(#adherenceFill)"
+                  dot={{ r: 3, fill: 'var(--card)', stroke: 'var(--chart-1)', strokeWidth: 2 }}
+                  activeDot={{ r: 5 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+export function DiseaseMetersCard({
   data,
   isLoading,
 }: {
@@ -10,213 +135,57 @@ export function AdherenceChart({
 }) {
   if (isLoading || !data) {
     return (
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-xs lg:col-span-2 dark:border-zinc-800 dark:bg-zinc-900">
-          <Skeleton className="h-6 w-48 mb-4" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-xs dark:border-zinc-800 dark:bg-zinc-900">
-          <Skeleton className="h-6 w-36 mb-4" />
-          <Skeleton className="h-64 w-full" />
+      <div className="rounded-xl bg-card p-6 ring-1 ring-foreground/10">
+        <Skeleton className="mb-4 h-5 w-40" />
+        <div className="space-y-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-3 w-32" />
+              <Skeleton className="h-2 w-full" />
+            </div>
+          ))}
         </div>
       </div>
     )
   }
 
-  const series = data.series || []
-  const byDisease = data.byDisease || []
-
-  // Menyiapkan titik koordinat SVG untuk grafik garis deret waktu
-  const chartHeight = 180
-  const chartWidth = 500
-  const paddingX = 40
-  const paddingY = 25
-
-  let pathD = ''
-  let points: Array<{ x: number; y: number; rate: number; date: string; confirmed: number; total: number }> = []
-
-  if (series.length > 0) {
-    const stepX = (chartWidth - paddingX * 2) / Math.max(series.length - 1, 1)
-
-    points = series.map((item, idx) => {
-      const x = paddingX + idx * stepX
-      const y = chartHeight - paddingY - item.adherenceRate * (chartHeight - paddingY * 2)
-      return {
-        x,
-        y: Math.max(paddingY, Math.min(chartHeight - paddingY, y)),
-        rate: item.adherenceRate,
-        date: item.date,
-        confirmed: item.confirmed,
-        total: item.total,
-      }
-    })
-
-    pathD = points.reduce((acc, pt, idx) => {
-      return idx === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`
-    }, '')
-  }
+  const byDisease = data.byDisease ?? []
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      {/* 1. Grafik Tren Harian */}
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-xs lg:col-span-2 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              Tren Kepatuhan Harian
-            </h3>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Periode: {data.period.from} s.d. {data.period.to}
-            </p>
-          </div>
-          <div className="mt-2 sm:mt-0 flex items-center gap-4 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              Tepat Waktu (%)
-            </span>
-          </div>
-        </div>
-
-        {series.length === 0 ? (
-          <div className="flex h-56 items-center justify-center text-sm text-zinc-500">
-            Tidak ada data jadwal obat pada periode tanggal ini.
-          </div>
-        ) : (
-          <div className="relative overflow-x-auto">
-            <svg
-              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-              className="w-full h-56 overflow-visible"
-            >
-              {/* Garis Grid Horizontal */}
-              {[0, 0.25, 0.5, 0.75, 1].map((lvl) => {
-                const y = chartHeight - paddingY - lvl * (chartHeight - paddingY * 2)
-                return (
-                  <g key={lvl}>
-                    <line
-                      x1={paddingX}
-                      y1={y}
-                      x2={chartWidth - paddingX}
-                      y2={y}
-                      stroke="currentColor"
-                      strokeDasharray="4 4"
-                      className="text-zinc-200 dark:text-zinc-800"
-                    />
-                    <text
-                      x={paddingX - 8}
-                      y={y + 3}
-                      textAnchor="end"
-                      fontSize="9"
-                      className="fill-zinc-400 dark:fill-zinc-500 font-mono"
-                    >
-                      {lvl * 100}%
-                    </text>
-                  </g>
-                )
-              })}
-
-              {/* Area gradien di bawah garis */}
-              {pathD && (
-                <>
-                  <defs>
-                    <linearGradient id="adherenceGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
-                      <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
-                    </linearGradient>
-                  </defs>
-                  <path
-                    d={`${pathD} L ${points[points.length - 1].x} ${chartHeight - paddingY} L ${points[0].x} ${chartHeight - paddingY} Z`}
-                    fill="url(#adherenceGrad)"
-                  />
-                  <path
-                    d={pathD}
-                    fill="none"
-                    stroke="#10b981"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </>
-              )}
-
-              {/* Titik data & Tooltip visual */}
-              {points.map((pt, i) => (
-                <g key={i} className="group cursor-pointer">
-                  <circle
-                    cx={pt.x}
-                    cy={pt.y}
-                    r="4"
-                    className="fill-white stroke-emerald-600 dark:fill-zinc-900"
-                    strokeWidth="2"
-                  />
-                  {/* Tanggal di sumbu X (hanya beberapa jika banyak) */}
-                  {(series.length <= 7 || i % Math.ceil(series.length / 6) === 0) && (
-                    <text
-                      x={pt.x}
-                      y={chartHeight - 6}
-                      textAnchor="middle"
-                      fontSize="9"
-                      className="fill-zinc-500 dark:fill-zinc-400"
-                    >
-                      {pt.date.slice(5)}
-                    </text>
-                  )}
-                  {/* Tooltip hover */}
-                  <title>{`${pt.date}: ${Math.round(pt.rate * 100)}% (${pt.confirmed}/${pt.total} jadwal)`}</title>
-                </g>
-              ))}
-            </svg>
-          </div>
-        )}
-      </div>
-
-      {/* 2. Distribusi Kepatuhan per Penyakit */}
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-xs dark:border-zinc-800 dark:bg-zinc-900">
-        <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+    <Card data-reveal className="reveal h-full">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <StethoscopeIcon className="size-4 text-primary" aria-hidden="true" />
           Kepatuhan per Penyakit
-        </h3>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-5">
-          Tingkat konsumsi tepat waktu
-        </p>
-
+        </CardTitle>
+        <CardDescription>Tingkat konsumsi tepat waktu</CardDescription>
+      </CardHeader>
+      <CardContent>
         {byDisease.length === 0 ? (
-          <div className="flex h-44 items-center justify-center text-sm text-zinc-500">
-            Tidak ada riwayat penyakit spesifik.
-          </div>
+          <EmptyState
+            icon={<StethoscopeIcon className="size-5" aria-hidden="true" />}
+            title="Belum ada riwayat penyakit"
+            description="Data penyakit pasien belum tercatat."
+          />
         ) : (
-          <div className="space-y-4">
+          <ul className="space-y-4">
             {byDisease.map((item) => {
               const percent = Math.round(item.adherenceRate * 100)
               return (
-                <div key={item.disease}>
-                  <div className="flex items-center justify-between text-sm font-medium mb-1">
-                    <span className="text-zinc-800 dark:text-zinc-200">
-                      {item.disease}
-                    </span>
-                    <span className="text-zinc-900 dark:text-zinc-100 font-bold">
-                      {percent}%{' '}
-                      <span className="text-xs font-normal text-zinc-400">
-                        ({item.total} dosis)
-                      </span>
-                    </span>
-                  </div>
-                  <div className="h-2.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        percent >= 80
-                          ? 'bg-emerald-500'
-                          : percent >= 60
-                            ? 'bg-amber-500'
-                            : 'bg-rose-500'
-                      }`}
-                      style={{ width: `${percent}%` }}
-                    />
-                  </div>
-                </div>
+                <li key={item.disease} className="breakdown-row">
+                  <span className="breakdown-label truncate">{item.disease}</span>
+                  <Meter
+                    value={percent}
+                    tone={percent >= 80 ? 'success' : percent >= 60 ? 'warning' : 'danger'}
+                    className="h-2"
+                  />
+                  <span className="breakdown-value">{percent}%</span>
+                </li>
               )
             })}
-          </div>
+          </ul>
         )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }

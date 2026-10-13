@@ -132,6 +132,72 @@ describe('requestOtp', () => {
   })
 })
 
+describe('verifyOtp — penandaan verifikasi', () => {
+  it('menandai nomor sebagai terverifikasi setelah kode cocok', async () => {
+    const marked: string[] = []
+    const deps = {
+      store: new InMemoryOtpStore(),
+      now: () => 1_000,
+      findUser: async () => ({
+        id: 'user-1',
+        fullName: 'Bu Ratna',
+        role: 'PATIENT' as const,
+        passwordHash: null,
+        isActive: true,
+        isVerified: false,
+      }),
+      signToken: () => 'token',
+      randomCode: () => '123456',
+      markVerified: async (id: string) => {
+        marked.push(id)
+      },
+    }
+
+    deps.store.set('081200000001', {
+      code: '123456',
+      expiresAtMs: 10_000,
+      issuedAtMs: 1_000,
+      attemptsLeft: 3,
+    })
+
+    const session = await verifyOtp(deps, { phone: '081200000001', otp: '123456' }, 3600)
+
+    expect(marked).toEqual(['user-1'])
+    expect(session.user.isVerified).toBe(true)
+  })
+
+  it('TIDAK menandai terverifikasi saat kode salah', async () => {
+    const marked: string[] = []
+    const deps = {
+      store: new InMemoryOtpStore(),
+      now: () => 1_000,
+      findUser: async () => ({
+        id: 'user-1',
+        fullName: 'Bu Ratna',
+        role: 'PATIENT' as const,
+        passwordHash: null,
+        isActive: true,
+        isVerified: false,
+      }),
+      signToken: () => 'token',
+      randomCode: () => '123456',
+      markVerified: async (id: string) => {
+        marked.push(id)
+      },
+    }
+
+    deps.store.set('081200000001', {
+      code: '123456',
+      expiresAtMs: 10_000,
+      issuedAtMs: 1_000,
+      attemptsLeft: 3,
+    })
+
+    await expect(verifyOtp(deps, { phone: '081200000001', otp: '000000' }, 3600)).rejects.toThrow()
+    expect(marked).toEqual([])
+  })
+})
+
 describe('verifyOtp', () => {
   it('kode benar mengembalikan token dan profil pasien', async () => {
     const deps = harness()

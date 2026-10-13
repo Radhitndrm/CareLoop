@@ -1,7 +1,14 @@
 // CL-006: login nakes/admin berbasis kata sandi.
 // Logika sengaja dipisah dari route dan menerima dependency (pencarian user +
 // penandatangan token) agar bisa diuji tanpa database maupun instance Fastify.
-import type { AuthSession, AuthUserClaims, NakesLoginInput, UserRole } from '@careloop/shared'
+import type {
+  AuthSession,
+  AuthUserClaims,
+  NakesLoginInput,
+  NakesRole,
+  UserRole,
+} from '@careloop/shared'
+import { isLoginableStaffStatus } from '@careloop/shared'
 import { forbidden, unauthorized } from '../../lib/errors'
 import { verifyPassword } from '../../lib/password'
 
@@ -15,6 +22,9 @@ export interface AuthUserRecord {
   id: string
   fullName: string
   role: UserRole
+  nakesRole?: NakesRole | null
+  /** Hanya terisi untuk role NAKES; null berarti akun non-nakes. */
+  staffStatus?: string | null
   passwordHash: string | null
   isActive: boolean
   isVerified: boolean
@@ -67,7 +77,20 @@ export async function loginWithPassword(
     throw forbidden('Akun Anda dinonaktifkan. Hubungi admin puskesmas.')
   }
 
+  // `isActive` sudahmencakup penangguhan umum; `staffStatus` menambah kasus khusus staf
+  // yang belum mengaktifkan akun (INVITED) atau sedang cuti (SUSPENDED).
+  if (!isLoginableStaffStatus(user.staffStatus)) {
+    throw forbidden(
+      user.staffStatus === 'INVITED'
+        ? 'Akun Anda belum diaktifkan. Gunakan kode undangan dari admin.'
+        : 'Akun Anda sedang ditangguhkan. Hubungi admin puskesmas.',
+    )
+  }
+
   const claims: AuthUserClaims = { sub: user.id, role: user.role }
+  // Peran klinis ikut token supaya kewenangan menyetujui resep tidak perlu
+  // query user lagi di setiap request (docs/API.md §3.2).
+  if (user.nakesRole) claims.nakesRole = user.nakesRole
 
   return {
     accessToken: deps.signToken(claims, expiresInSec),
@@ -75,6 +98,7 @@ export async function loginWithPassword(
     user: {
       id: user.id,
       role: user.role,
+      ...(user.nakesRole ? { nakesRole: user.nakesRole } : {}),
       fullName: user.fullName,
       isVerified: user.isVerified,
     },

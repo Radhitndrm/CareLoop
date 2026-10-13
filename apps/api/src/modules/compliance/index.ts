@@ -1,11 +1,13 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { UserRole, complianceConfirmSchema } from '@careloop/shared'
+import { UserRole, complianceConfirmSchema, complianceListQuerySchema } from '@careloop/shared'
 import { prisma } from '../../lib/prisma'
-import { authenticate, getAuthUser, requireRole } from '../../lib/auth'
+import { authenticate, getAuthUser, requireCareTeamRole, requireRole } from '../../lib/auth'
 import { notFound } from '../../lib/errors'
+import { assertPatientInScope, type PatientsPrismaClient } from '../patients/patients.service'
 import {
   assertScheduleOwner,
   confirmMedicationIntake,
+  listPatientCompliance,
   type CompliancePrismaClient,
 } from './compliance.service'
 
@@ -14,10 +16,13 @@ export {
   classifyConfirmation,
   confirmMedicationIntake,
   isBeyondLatenessLimit,
+  listPatientCompliance,
   resolveConfirmSlot,
 } from './compliance.service'
 export type {
   ClassificationInput,
+  ComplianceListItem,
+  ComplianceListResult,
   CompliancePrismaClient,
   ConfirmIntakeInput,
   ConfirmIntakeResult,
@@ -84,6 +89,39 @@ export function registerComplianceRoutes(app: FastifyInstance): void {
           escalationRunId: result.escalationRunId,
         },
       })
+    },
+  )
+
+  // GET /v1/patients/:id/compliance — timeline "sudah minum" versi nakes.
+  // Konfirmasi pasien (WhatsApp atau tombol app) terkumpul di sini, sehingga
+  // perawat & dokter bisa melihat kepatuhan per pasien, bukan cuma agregat.
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>(
+    '/v1/patients/:id/compliance',
+    { preHandler: [authenticate, requireCareTeamRole()] },
+    async (req) => {
+      const claims = getAuthUser(req)
+      const query = complianceListQuerySchema.parse(req.query ?? {})
+
+      await assertPatientInScope(prisma as unknown as PatientsPrismaClient, claims, req.params.id)
+
+      const result = await listPatientCompliance(prisma as unknown as CompliancePrismaClient, {
+        patientId: req.params.id,
+        from: query.from,
+        to: query.to,
+        status: query.status,
+        limit: query.limit,
+        offset: query.offset,
+      })
+
+      return {
+        data: result.items,
+        meta: {
+          total: result.total,
+          pageSize: result.limit,
+          page: Math.floor(result.offset / result.limit) + 1,
+          summary: result.summary,
+        },
+      }
     },
   )
 }

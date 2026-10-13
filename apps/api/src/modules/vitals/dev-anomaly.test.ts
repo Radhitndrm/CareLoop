@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma'
 
 describe('POST /v1/dev/mock-anomaly (CL-203)', () => {
   let app: FastifyInstance
+  let nakesHeaders: Record<string, string>
   const dummyPatientId = '11111111-1111-4111-8111-111111111111'
 
   beforeAll(async () => {
@@ -11,7 +12,9 @@ describe('POST /v1/dev/mock-anomaly (CL-203)', () => {
     process.env.JWT_SECRET ??= 'test-secret-minimal-32-karakter-abcdefg'
 
     const { buildApp } = await import('../../app')
-    app = await buildApp({ logger: false })
+    app = await buildApp({ logger: false, enableWs: false })
+    // Endpoint dev kini bertoken (wasinya terbuka).
+    nakesHeaders = { authorization: `Bearer ${app.jwt.sign({ sub: '11111111-1111-4111-8111-111111111111', role: 'NAKES', nakesRole: 'DOKTER' } as any)}` }
   })
 
   it('berhasil memicu anomali HIGH_HR sintetis untuk demo', async () => {
@@ -34,6 +37,7 @@ describe('POST /v1/dev/mock-anomaly (CL-203)', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/dev/mock-anomaly',
+      headers: nakesHeaders,
       payload: {
         patientId: dummyPatientId,
         type: 'HIGH_HR',
@@ -70,6 +74,7 @@ describe('POST /v1/dev/mock-anomaly (CL-203)', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/dev/mock-anomaly',
+      headers: nakesHeaders,
       payload: {
         patientId: dummyPatientId,
         type: 'SPIKE',
@@ -92,6 +97,7 @@ describe('POST /v1/dev/mock-anomaly (CL-203)', () => {
       const res = await app.inject({
         method: 'POST',
         url: '/v1/dev/mock-anomaly',
+        headers: nakesHeaders,
         payload: {
           type: 'HIGH_HR',
         },

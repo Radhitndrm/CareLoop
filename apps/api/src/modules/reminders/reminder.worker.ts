@@ -14,6 +14,7 @@ import {
   AuditAction,
   Channel,
   EscalationContext,
+  isSchedulablePatientStatus,
   ReminderChannel,
   ReminderStatus,
 } from '@careloop/shared'
@@ -77,6 +78,10 @@ export interface ReminderScheduleData {
   patientId: string
   timeOfDay: string
   isActive: boolean
+  /** Status persetujuan klinis; hanya APPROVED boleh memicu reminder (docs/API.md §3.2). */
+  status: string
+  /** Status operasional pasien; hanya ACTIVE boleh memicu reminder (guardrail flow §2). */
+  patientStatus: string
   doseQty: string
   medicationName: string
   patientPhone: string
@@ -107,6 +112,7 @@ export async function loadReminderSchedule(
       patient: {
         select: {
           voiceEnabled: true,
+          status: true,
           user: { select: { phone: true, fullName: true } },
         },
       },
@@ -120,6 +126,8 @@ export async function loadReminderSchedule(
     patientId: schedule.patientId,
     timeOfDay: schedule.timeOfDay,
     isActive: schedule.isActive,
+    status: schedule.status ?? 'APPROVED',
+    patientStatus: schedule.patient?.status ?? 'ONBOARDING',
     doseQty: schedule.doseQty,
     medicationName: schedule.medication?.name ?? 'Obat',
     patientPhone: schedule.patient?.user?.phone ?? '',
@@ -270,6 +278,27 @@ export async function handleReminderJob(
   if (!schedule)
     return skipped(payload.scheduleId, null, `Schedule ${payload.scheduleId} tidak ditemukan`)
   if (!schedule.isActive) return skipped(schedule.id, schedule.patientId, 'Schedule tidak aktif')
+
+  // Preskripsi belum disahkan dokter -> jangan ganggu pasien dengan pengingat
+  // obat yang belum resmi (docs/API.md §3.2).
+  if (schedule.status !== 'APPROVED') {
+    return skipped(
+      schedule.id,
+      schedule.patientId,
+      `Preskripsi belum disetujui dokter (status ${schedule.status})`,
+    )
+  }
+
+  // Pasien yang belum diaktivasi (ONBOARDING/INACTIVE/BLOCKED) tidak boleh diganggu
+  // (guardrail flow §2). Dicek di worker DAN di dispatcher: dispatcher menahan
+  // pekerjaan, worker menutup jalur manual/internal yang mungkin masuk ke sini.
+  if (!isSchedulablePatientStatus(schedule.patientStatus)) {
+    return skipped(
+      schedule.id,
+      schedule.patientId,
+      `Pasien belum berstatus ACTIVE (status ${schedule.patientStatus})`,
+    )
+  }
 
   // Idempotensi (RM-5): slot waktu yang sudah punya baris SENT tidak dikirim ulang.
   const alreadySent = await prisma.reminderLog.findFirst({

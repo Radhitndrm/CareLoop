@@ -1,4 +1,5 @@
 import { ComplianceChannel } from '@careloop/shared'
+import { authHeaders, getStoredToken, setStoredToken } from './auth'
 
 export interface ComplianceConfirmResponseData {
   scheduleId: string
@@ -76,6 +77,9 @@ export async function confirmCompliance(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        // Semua endpoint pasien di balik `authenticate` (AGENTS.md §2): tanpa header
+        // ini permintaan dijawab `401` dan tombol konfirmasi tidak akan pernah berhasil.
+        ...(await authHeaders()),
       },
       body: JSON.stringify({
         scheduleId,
@@ -129,6 +133,9 @@ export async function respondEmergency(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        // Semua endpoint pasien di balik `authenticate` (AGENTS.md §2): tanpa header
+        // ini permintaan dijawab `401` dan tombol konfirmasi tidak akan pernah berhasil.
+        ...(await authHeaders()),
       },
       body: JSON.stringify(payload),
     })
@@ -157,7 +164,7 @@ export async function getEmergencyAlert(emergencyId: string): Promise<EmergencyA
   const endpoint = `${baseUrl}/v1/emergencies/${encodeURIComponent(emergencyId)}`
 
   try {
-    const res = await fetch(endpoint)
+    const res = await fetch(endpoint, { headers: await authHeaders() })
     const result = await res.json()
 
     if (!res.ok || !result.data) {
@@ -188,6 +195,9 @@ export async function triggerEmergencyTimeout(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        // Semua endpoint pasien di balik `authenticate` (AGENTS.md §2): tanpa header
+        // ini permintaan dijawab `401` dan tombol konfirmasi tidak akan pernah berhasil.
+        ...(await authHeaders()),
       },
       body: JSON.stringify({
         notes: notes || 'Timeout dari aplikasi mobile pasien',
@@ -206,4 +216,176 @@ export async function triggerEmergencyTimeout(
     }
     throw new Error('Terjadi kesalahan jaringan saat memicu timeout darurat')
   }
+}
+
+// ---------------------------------------------------------------- farmasi (docs/API.md §3.6)
+
+export interface MedicationOption {
+  id: string
+  name: string
+  dosage: string | null
+  daysSupply: number | null
+  quantityRemaining: number | null
+}
+
+export interface MedicationRequestItem {
+  id: string
+  medicationId: string
+  medicationName: string
+  dosage: string | null
+  requestedQuantity: number
+  status: string
+  source: string
+  reasonLabel: string | null
+  reasonNotes: string | null
+  dueAt: string
+  doctorDecisionNote: string | null
+  blockedReason: string | null
+  createdAt: string
+}
+
+/**
+ * Seluruh request pasien memakai header auth dari `services/auth` (expo-secure-store).
+ *
+ * Sebelumnya token hanya hidup di memori modul dan tidak pernah diisi — sehingga
+ * semua tab farmasi gagal dengan "Belum masuk", sementara request emergency dan
+ * konfirmasi sama sekali tidak mengirim header apa pun dan dijawab `401`.
+ */
+async function authedRequest<T>(
+  endpoint: string,
+  init?: RequestInit,
+): Promise<T> {
+  const token = await getStoredToken()
+  if (!token) {
+    throw new Error('Belum masuk. Silakan login terlebih dahulu.')
+  }
+
+  const baseUrl = getApiBaseUrl()
+  try {
+    const res = await fetch(`${baseUrl}${endpoint}`, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(init?.headers ?? {}),
+      },
+    })
+    const result = (await res.json()) as {
+      data?: T
+      meta?: { summary?: MedicationRequestSummary }
+      error?: { code: string; message: string }
+    }
+
+    if (!res.ok || result.data === undefined) {
+      throw new Error(result.error?.message || `Gagal memuat data (HTTP ${res.status})`)
+    }
+    return result.data
+  } catch (err: unknown) {
+    if (err instanceof Error) throw err
+    throw new Error('Terjadi kesalahan jaringan saat menghubungi server')
+  }
+}
+
+export interface MedicationRequestSummary {
+  queued: number
+  preparing: number
+  ready: number
+  overdue: number
+  pendingDoctor: number
+}
+
+export async function getMyMedications(): Promise<MedicationOption[]> {
+  return authedRequest<MedicationOption[]>('/v1/patients/me/medications')
+}
+
+export async function getMyMedicationRequests(): Promise<MedicationRequestItem[]> {
+  return authedRequest<MedicationRequestItem[]>('/v1/medication-requests?limit=100')
+}
+
+export async function requestMedication(payload: {
+  medicationId: string
+  requestedQuantity: number
+  reasonCode: string
+  reasonNotes?: string
+}): Promise<MedicationRequestItem> {
+  return authedRequest<MedicationRequestItem>('/v1/medication-requests', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+// ---------------------------------------------------------------- auth pasien
+
+export interface OtpRequestResult {
+  otpExpiresAt: string
+  retryAfterSec: number
+  /** Hanya terisi saat PROVIDER_MODE=mock, supaya demo bisa masuk tanpa inbox. */
+  devCode?: string | null
+}
+
+export interface AuthSessionData {
+  accessToken: string
+  expiresIn: number
+  user: { id: string; role: string; fullName: string; isVerified: boolean }
+}
+
+async function publicPost<T>(endpoint: string, payload: Record<string, unknown>): Promise<T> {
+  const baseUrl = getApiBaseUrl()
+  try {
+    const res = await fetch(`${baseUrl}${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const result = (await res.json()) as { data?: T; error?: { message: string } }
+
+    if (!res.ok || result.data === undefined) {
+      throw new Error(result.error?.message || `Permintaan gagal (HTTP ${res.status})`)
+    }
+    return result.data
+  } catch (err: unknown) {
+    if (err instanceof Error) throw err
+    throw new Error('Tidak dapat menghubungi server')
+  }
+}
+
+/** Minta kode OTP. Tidak pernah menandai apa pun; hanya kode yang dikirim. */
+export async function requestOtp(phone: string): Promise<OtpRequestResult> {
+  return publicPost<OtpRequestResult>('/v1/auth/otp/request', { phone })
+}
+
+/**
+ * Tukar OTP dengan sesi ber-token. Token langsung disimpan lewat secure store,
+ * jadi refresh tidak perlu login ulang di tiap pembukaan aplikasi.
+ */
+export async function verifyOtp(phone: string, otp: string): Promise<AuthSessionData> {
+  const session = await publicPost<AuthSessionData>('/v1/auth/otp/verify', { phone, otp })
+  await setStoredToken(session.accessToken)
+  return session
+}
+
+// ------------------------------------------------------------ jadwal pasien
+
+export interface OwnSchedule {
+  id: string
+  medicationName: string
+  dosage: string | null
+  instructions: string | null
+  doseQty: string
+  timeOfDay: string
+  daysOfWeek: number[]
+  startDate: string | null
+  endDate: string | null
+  /** Waktu UTC jadwal berikutnya; null berarti jadwal sudah melewati rentangnya. */
+  nextFireAt: string | null
+}
+
+/**
+ * Jadwal obat milik pasien yang sedang login.
+ *
+ * `scheduleId` selalu dari server — aplikasi tidak pernah memakai UUID dummy, sehingga
+ * konfirmasi tidak mungkin jatuh ke jadwal orang lain.
+ */
+export async function getMySchedules(): Promise<OwnSchedule[]> {
+  return authedRequest<OwnSchedule[]>('/v1/patients/me/reminders')
 }

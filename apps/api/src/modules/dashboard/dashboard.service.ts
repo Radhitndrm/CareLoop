@@ -170,7 +170,13 @@ export async function resolveNakesScope(
     conditions.push({ districtCode: { in: districtCodes } })
   }
 
-  if (puskesmasIds.length > 0) {
+if (puskesmasIds.length > 0) {
+    // Relasi eksplisit: patients yang ditunjuk ke puskesmas penugasan. Inilah
+    // sumber organisasi utama (guardrail flow §1) dan tidak bergantung pada
+    // NakesContact yang dibuat manual saat pendaftaran.
+    conditions.push({ primaryPuskesmasId: { in: puskesmasIds } })
+    // NakesContact tetap dipertahankan untuk pasien lama yang belum punya
+    // primaryPuskesmasId, dan untuk kasus merujuk antar-puskesmas.
     conditions.push({
       nakesContacts: {
         some: {

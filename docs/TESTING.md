@@ -94,7 +94,7 @@ Lokasi: `apps/api/tests/*.integration.test.ts`.
 **Setup DB test (CL-003).** Suite integration memakai database **terpisah** dari `DATABASE_URL`, dikonfigurasi lewat `TEST_DATABASE_URL`:
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d              # postgres 16 + redis 7
+docker compose -f infra/docker-compose.yml up -d              # postgres 16 + redis 7 (host 6380)
 docker exec careloop-postgres createdb -U careloop careloop_test
 # apps/api/.env → TEST_DATABASE_URL=postgresql://careloop:careloop@localhost:5432/careloop_test?schema=public
 npm run test

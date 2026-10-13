@@ -3,7 +3,11 @@ import { EnvValidationError, getEnv } from './lib/env'
 
 async function main(): Promise<void> {
   const env = getEnv()
-  const app = await buildApp()
+  const app = await buildApp({
+    enablePharmacyScheduler: true,
+    enableReminderScheduler: true,
+    enableEscalationScheduler: true,
+  })
 
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' })

@@ -407,6 +407,7 @@ describe('CL-214: Integration Test Fase 2 (M2 Darurat & Dashboard)', () => {
       const res = await app.inject({
         method: 'POST',
         url: `/v1/emergencies/${emergencyId2}/timeout`,
+        headers: { Authorization: `Bearer ${tokenPatientBuRatna}` },
         payload: {
           notes: 'Timeout 45 detik: pasien tidak merespons konfirmasi darurat',
         },
@@ -476,6 +477,7 @@ describe('CL-214: Integration Test Fase 2 (M2 Darurat & Dashboard)', () => {
       const res = await app.inject({
         method: 'POST',
         url: `/v1/emergencies/${emergencyId3}/timeout`,
+        headers: { Authorization: `Bearer ${tokenPatientPakHaji}` },
         payload: {
           notes: 'Timeout 45 detik: pasien ALONE tidak merespons',
         },

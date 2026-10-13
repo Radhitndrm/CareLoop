@@ -9,6 +9,9 @@ import { registerErrorHandler } from './lib/errors'
 import { registerRoutes } from './routes'
 
 import { createDashboardWsServer, getDashboardWsServer, setDashboardWsServer } from './modules/dashboard/ws'
+import { registerEscalationScheduler } from './modules/escalation/escalation.scheduler'
+import { registerPharmacyScheduler } from './modules/pharmacy/pharmacy.scheduler'
+import { registerReminderScheduler } from './modules/reminders/reminder.scheduler'
 
 export interface BuildAppOptions {
   logger?: boolean
@@ -16,6 +19,23 @@ export interface BuildAppOptions {
   rateLimitMax?: number
   corsOrigins?: string[]
   enableWs?: boolean
+  /**
+   * Scheduler permintaan rutin farmasi. Default MATI dan diaktifkan eksplisit
+   * oleh bootstrap di src/index.ts — supaya test yang memanggil buildApp()
+   * tidak suddenly membuat request obat di database test.
+   */
+  enablePharmacyScheduler?: boolean
+  /**
+   * Dispatcher reminder (memindai jadwal -> job WhatsApp). Default MATI dan diaktifkan
+   * eksplisit oleh bootstrap di src/index.ts — test yang memanggil buildApp() tidak
+   * boleh diam-diam mengirim pesan ke nomor patients.
+   */
+  enableReminderScheduler?: boolean
+  /**
+   * Reconciler timeout eskalasi (WAITING_PATIENT -> keluarga tier 1/2 -> nakes).
+   * Default MATI dengan alasan yang sama seperti scheduler di atas.
+   */
+  enableEscalationScheduler?: boolean
 }
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -72,6 +92,18 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         }
       }
     })
+  }
+
+  if (opts.enablePharmacyScheduler === true) {
+    registerPharmacyScheduler(app)
+  }
+
+  if (opts.enableReminderScheduler === true) {
+    registerReminderScheduler(app)
+  }
+
+  if (opts.enableEscalationScheduler === true) {
+    registerEscalationScheduler(app)
   }
 
   return app

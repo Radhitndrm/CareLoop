@@ -103,3 +103,64 @@ export function buildFamilyAlertBody(data: EscalationAlertData, runId: string): 
 export function buildNakesAlertBody(data: EscalationAlertData, runId: string): WaInteractiveBody {
   return buildEscalationBody({ ...data, showCall112: true }, runId, 'Alert Nakes')
 }
+
+// ---------------------------------------------------------------- farmasi (docs/API.md §3.6)
+// Pesan farmasi dikirim sebagai TEXT biasa, bukan INTERACTIVE: pasien tidak punya
+// aksi yang perlu ditekan — obat sudah disiapkan otomatis oleh petugas — dan
+// template tanpa tombol lebih murah serta tidak ikut kedaluwarsa di Meta.
+
+export interface PharmacyTemplateData {
+  patientName: string
+  medicationName: string
+  quantityDays: number
+  pickupDate: string
+}
+
+function pharmacyBody(data: PharmacyTemplateData, message: string): string {
+  return `${message}\n\nPasien: ${data.patientName}\nObat: ${data.medicationName}\nJatah: ${data.quantityDays} hari\nAmbil paling lambat: ${data.pickupDate}`
+}
+
+/** Permintaan obat pasien disetujui dokter dan masuk antrean farmasi. */
+export function buildMedicationRequestApprovedTemplate(data: PharmacyTemplateData): string {
+  return pharmacyBody(
+    data,
+    'Permintaan obat Anda sudah disetujui dokter dan sedang kami siapkan. Kami akan kabari lagi saat obat siap diambil.',
+  )
+}
+
+/** Permintaan ditolak dokter. Alasan wajib ikut — pasien berhak tahu sebabnya. */
+export function buildMedicationRequestRejectedTemplate(
+  data: PharmacyTemplateData,
+  reason: string,
+): string {
+  return `${pharmacyBody(data, 'Permintaan obat Anda belum dapat kami penuhi.')}\n\nAlasan dari dokter: ${reason}\n\nSilakan hubungi puskesmas bila ada hal yang ingin ditanyakan.`
+}
+
+/** Obat sudah siap diambil. Dikirim ke pasien dan keluarga (WA interactive tidak perlu). */
+export function buildMedicationReadyTemplate(data: PharmacyTemplateData): string {
+  return pharmacyBody(
+    data,
+    'Obat Anda sudah siap diambil di Puskesmas. Jangan lupa membawa KTP dan kotak obat sebelumnya bila masih ada.',
+  )
+}
+
+/** Stok obat habis di puskesmas. */
+export function buildOutOfStockTemplate(data: PharmacyTemplateData, reason: string): string {
+  return `${pharmacyBody(data, 'Maaf, obat yang Anda minta sedang tidak tersedia.')}\n\nAlasan: ${reason}\n\nDokter kami sudah diberi tahu agar menindaklanjuti.`
+}
+
+/** Obat diganti dengan nama lain atas persetujuan dokter. */
+export function buildSubstitutedTemplate(data: PharmacyTemplateData, substituteName: string): string {
+  return pharmacyBody(
+    data,
+    `Obat ${data.medicationName} digantikan dengan ${substituteName}. Pengganti ini sudah disetujui dokter sesuai catatan di resep Anda.`,
+  )
+}
+
+/** Permintaan rutin otomatis: pasien diberi tahu obatnya akan disiapkan. */
+export function buildRoutineRefillTemplate(data: PharmacyTemplateData): string {
+  return pharmacyBody(
+    data,
+    `Jatah obat Anda akan habis. Kami sudah menyiapkan pengajuan obat ${data.medicationName} untuk pengambilan rutin.`,
+  )
+}
