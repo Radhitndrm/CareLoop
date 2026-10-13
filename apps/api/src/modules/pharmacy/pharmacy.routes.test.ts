@@ -21,12 +21,51 @@ describe('Pharmacy routes — RBAC (docs/API.md §3.6)', () => {
     app = await buildApp({ logger: false, enableWs: false, enablePharmacyScheduler: false })
     await app.ready()
 
+    // Stub DEFAULT untuk setiap delegate yang bisa disentuh handler farmasi & resep.
+    //
+    // Suite ini sebelumnya hanya meng-stub sebagian, sisanya jatuh ke database sungguhan
+    // dan lulus selama DB lokal ada. Di CI (tanpa database) sisanya jadi 500. Test route
+    // tidak boleh bergantung pada database: yang diperiksa di sini adalah gate kewenangan
+    // dan bentuk respons, bukan integritas database.
+    //
+    // Test individual tetap bisa menimpa dengan `vi.spyOn(...).mockResolvedValue(...)`.
     vi.spyOn(prisma.auditLog, 'create').mockResolvedValue({ id: 'audit-1' } as any)
     vi.spyOn(prisma.notification, 'create').mockResolvedValue({ id: 'notif-1' } as any)
     vi.spyOn(prisma.notification, 'createMany').mockResolvedValue({ count: 0 } as any)
+    vi.spyOn(prisma.medicationRequestEvent, 'create').mockResolvedValue({ id: 'event-1' } as any)
     vi.spyOn(prisma.familyContact, 'findMany').mockResolvedValue([] as any)
     vi.spyOn(prisma.nakesContact, 'findMany').mockResolvedValue([] as any)
+    // `resolveNakesScope` selalu membaca assignment; tanpa stub ini seluruh endpoint
+    // yang butuh scope akan menembak ke database.
+    vi.spyOn(prisma.nakesAssignment, 'findMany').mockResolvedValue([] as any)
+
+    // Kueri baca.
+    vi.spyOn(prisma.patient, 'findMany').mockResolvedValue([] as any)
+    vi.spyOn(prisma.patient, 'findFirst').mockResolvedValue(null as any)
+    vi.spyOn(prisma.patient, 'findUnique').mockResolvedValue(null as any)
+    vi.spyOn(prisma.patient, 'count').mockResolvedValue(0 as any)
+    vi.spyOn(prisma.medication, 'findMany').mockResolvedValue([] as any)
+    vi.spyOn(prisma.medication, 'findUnique').mockResolvedValue(null as any)
+    vi.spyOn(prisma.medication, 'count').mockResolvedValue(0 as any)
+    vi.spyOn(prisma.medicationRequest, 'findMany').mockResolvedValue([] as any)
+    vi.spyOn(prisma.medicationRequest, 'findFirst').mockResolvedValue(null as any)
+    vi.spyOn(prisma.medicationRequest, 'findUnique').mockResolvedValue(null as any)
+    vi.spyOn(prisma.medicationRequest, 'count').mockResolvedValue(0 as any)
+    // Kode memakai `findMany` untuk sisa stok per pasien, bukan `findUnique`.
+    vi.spyOn(prisma.medicationStock, 'findMany').mockResolvedValue([] as any)
     vi.spyOn(prisma.medicationStock, 'findUnique').mockResolvedValue(null as any)
+    vi.spyOn(prisma.complianceLog, 'findMany').mockResolvedValue([] as any)
+    vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null as any)
+
+    // Kueri tulis.
+    vi.spyOn(prisma.patient, 'update').mockResolvedValue({} as any)
+    vi.spyOn(prisma.medication, 'create').mockResolvedValue({} as any)
+    vi.spyOn(prisma.medication, 'update').mockResolvedValue({} as any)
+    vi.spyOn(prisma.medicationRequest, 'create').mockResolvedValue({} as any)
+    vi.spyOn(prisma.medicationRequest, 'update').mockResolvedValue({} as any)
+    vi.spyOn(prisma.medicationStock, 'upsert').mockResolvedValue({} as any)
+    vi.spyOn(prisma.schedule, 'create').mockResolvedValue({} as any)
+    vi.spyOn(prisma.schedule, 'updateMany').mockResolvedValue({ count: 0 } as any)
   }, 60_000)
 
   beforeEach(() => {

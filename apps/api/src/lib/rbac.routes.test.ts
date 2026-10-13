@@ -63,7 +63,7 @@ describe('RBAC lintas domain', () => {
   ]
 
   describe('1. Tanpa token — tidak boleh ada yang bocor', () => {
-    // 401occurred sebelum handler, jadi database tidak perlu di-mock di sini.
+    // 401 terjadi sebelum handler, jadi database tidak perlu di-mock di sini.
     for (const route of careTeamOnlyRoutes) {
       it(`${route.method} ${route.url} menolak tanpa token (${route.label})`, async () => {
         const res = await app.inject({ method: route.method, url: route.url })
@@ -112,6 +112,9 @@ describe('RBAC lintas domain', () => {
       const { prisma } = await import('./prisma')
       vi.spyOn(prisma.medicationRequest, 'findMany').mockResolvedValue([] as any)
       vi.spyOn(prisma.medicationRequest, 'count').mockResolvedValue(0 as any)
+      // Sisa stok diambil lewat `findMany`, bukan `findUnique` seperti di endpoint lain.
+      vi.spyOn(prisma.medicationStock, 'findMany').mockResolvedValue([] as any)
+      vi.spyOn(prisma.nakesAssignment, 'findMany').mockResolvedValue([] as any)
 
       const res = await app.inject({
         method: 'GET',
@@ -137,6 +140,12 @@ describe('RBAC lintas domain', () => {
       const { prisma } = await import('./prisma')
       vi.spyOn(prisma.patient, 'count').mockResolvedValue(0 as any)
       vi.spyOn(prisma.patient, 'findMany').mockResolvedValue([] as any)
+      // Dashboard menyimpan skor risiko; tanpa stub, patient.findMany tidak punya
+      // field `riskScore` dan penyusun datacsv gagal diam-diam.
+      vi.spyOn(prisma.riskPrediction, 'findMany').mockResolvedValue([] as any)
+      vi.spyOn(prisma.nakesAssignment, 'findMany').mockResolvedValue([] as any)
+      vi.spyOn(prisma.escalationRun, 'count').mockResolvedValue(0 as any)
+      vi.spyOn(prisma.emergencyAlert, 'count').mockResolvedValue(0 as any)
 
       const res = await app.inject({ method: 'GET', url: '/v1/dashboard/summary', headers: perawat() })
       expect(res.statusCode).not.toBe(403)
@@ -146,6 +155,7 @@ describe('RBAC lintas domain', () => {
       const { prisma } = await import('./prisma')
       vi.spyOn(prisma.medicationRequest, 'findMany').mockResolvedValue([] as any)
       vi.spyOn(prisma.medicationRequest, 'count').mockResolvedValue(0 as any)
+      vi.spyOn(prisma.medicationStock, 'findMany').mockResolvedValue([] as any)
 
       const res = await app.inject({
         method: 'GET',
