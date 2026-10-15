@@ -118,6 +118,14 @@ harus ada di sana — kalau tidak, suite integration dan test Redis diam-diam te
 dan hasil hijau menyesatkan. Kalau jumlah test skip berubah, cek daftar itu lebih dulu.
 `QUEUE_DISABLE_REDIS=1` memaksa test Redis dilewati saat runner memang tidak punya Redis.
 
+**Jangan pernah daftarkan `NODE_ENV` di `globalEnv`.** CI menyetel
+`NODE_ENV: development` untuk seluruh job; kalau Turbo meneruskannya ke
+`next build`, prerender gagal dengan
+`TypeError: Cannot read properties of null (reading 'useSyncExternalStore')` dan
+build web mati. `next build` harus menerima `NODE_ENV` kosong supaya Next yang
+menetapkannya ke `production`. Kalau hal ini muncul, jalankan
+`NODE_ENV=development npx turbo run build --force` untuk mereproduksi cepat.
+
 **Kasus inti:**
 1. **Reminder fire** → job scheduler → `POST /internal/jobs/reminder` → notification WA mock dipanggil dengan benar → `reminder_logs` terisi.
 2. **Konfirmasi WA**: webhook dengan signature valid + `button_reply.id=CONFIRM_TAKEN_s1` → compliance log `CONFIRMED`, eskalasi aktif dibatalkan.

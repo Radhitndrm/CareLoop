@@ -1,7 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalEnv": [
-    "NODE_ENV",
     "PORT",
     "DATABASE_URL",
     "DIRECT_URL",
