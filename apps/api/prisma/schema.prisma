@@ -8,7 +8,11 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Runtime API: boleh connection pooler (Supabase transaction mode, port 6543).
+  url = env("DATABASE_URL")
+  // Migrasi/schema deploy: HARUS koneksi direct (Supabase port 5432). Pooler
+  // PgBouncer tidak mendukung session prepared statement yang dipakai DDL.
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------------------------------------------------------------- enums

@@ -52,10 +52,23 @@ export interface EmergencyAlertDetail {
   }
 }
 
-const DEFAULT_API_URL = 'http://localhost:4000'
-
+/**
+ * Base URL API publik. `EXPO_PUBLIC_API_URL` di-inline Expo saat build.
+ *
+ * Fallback `localhost` hanya untuk simulator/emulator saat development: di perangkat
+ * fisik `localhost` berarti HP-nya sendiri, dan permintaan akan gagal dengan galat
+ * jaringan yang membingungkan. Karena itu di luar development konfigurasi yang
+ * hilang harus gagal cepat dengan pesan jelas, bukan diam-diam menembak lokal.
+ */
 export function getApiBaseUrl(): string {
-  return process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL
+  const configured = process.env.EXPO_PUBLIC_API_URL?.trim()
+  if (configured) return configured.replace(/\/+$/, '')
+
+  if (__DEV__) return 'http://localhost:4000'
+
+  throw new Error(
+    'EXPO_PUBLIC_API_URL wajib diisi saat build production (mis. https://api-careloop.up.railway.app)',
+  )
 }
 
 /**

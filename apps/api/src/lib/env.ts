@@ -29,6 +29,11 @@ export const envSchema = z
     TEST_DATABASE_URL: z.string().optional(),
 
     // Queue & cache
+    /**
+     * Kosong hanya sah di development/test — production mewajibkan Redis karena
+     * in-process queue hilang saat restart (ADR-010) dan reminder/eskalasi tidak
+     * boleh hilang diam-diam saat deploy ulang.
+     */
     REDIS_URL: z.string().optional(),
 
     // Auth & kripto
@@ -119,6 +124,23 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['CORS_ORIGINS'],
         message: 'CORS_ORIGINS wajib diisi di production (whitelist domain frontend)',
+      })
+    }
+
+    if (value.NODE_ENV === 'production' && !value.REDIS_URL) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['REDIS_URL'],
+        message:
+          'REDIS_URL wajib diisi di production — tanpa itu queue jatuh ke in-process dan hilang saat restart',
+      })
+    }
+
+    if (value.NODE_ENV === 'production' && !value.DIRECT_URL) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['DIRECT_URL'],
+        message: 'DIRECT_URL wajib diisi di production untuk `prisma migrate deploy` (koneksi non-pooler)',
       })
     }
 

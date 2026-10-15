@@ -14,9 +14,10 @@ out/
 web-build/
 
 # Env & secrets
+# Semua `.env*` diabaikan kecuali `.env.example` — termasuk varian per environment
+# (`.env.staging`, `.env.production`) yang sebelumnya bisa ikut ter-commit.
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
 
 # Logs

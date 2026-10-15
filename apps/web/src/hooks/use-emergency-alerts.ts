@@ -3,10 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { io, type Socket } from 'socket.io-client'
 import {
+  apiBaseUrl,
   getDashboardAlerts,
   respondEscalation,
   type ActiveAlerts,
 } from '../lib/api'
+import { useAuth } from '../lib/auth'
 
 export interface EmergencyAlertItem {
   id: string
@@ -49,10 +51,6 @@ interface EmergencyAckPayload {
   ackByUserId?: string
   ackAt?: string
 }
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
-
-import { useAuth } from '../lib/auth'
 
 export function useEmergencyAlerts() {
   const { token } = useAuth()
@@ -150,7 +148,7 @@ export function useEmergencyAlerts() {
     }, 30000)
 
     if (token) {
-      const socket: Socket = io(API_BASE_URL, {
+      const socket: Socket = io(apiBaseUrl(), {
         auth: { token },
         transports: ['websocket', 'polling'],
         reconnectionAttempts: 5,

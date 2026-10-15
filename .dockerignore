@@ -1,0 +1,16 @@
+# Jangan pernah kirim secret atau dependensi lokal ke daemon build.
+.git
+.github
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+.env
+.env.*
+!.env.example
+infra
+docs
+tasks
+*.log
+.DS_Store

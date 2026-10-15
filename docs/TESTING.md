@@ -112,6 +112,12 @@ Helper `apps/api/tests/helpers/test-db.ts`:
 
 `migrateTestDb()`/`createTestPrisma()` **menolak jalan** bila `TEST_DATABASE_URL` sama dengan `DATABASE_URL` — pengaman agar TRUNCATE tidak pernah mengenai DB dev/Supabase.
 
+**Env & Turborepo.** `npm run test` berjalan lewat Turbo, yang hanya meneruskan env
+yang terdaftar di `globalEnv` (`turbo.json`). `TEST_DATABASE_URL` dan `REDIS_URL`
+harus ada di sana — kalau tidak, suite integration dan test Redis diam-diam ter-skip
+dan hasil hijau menyesatkan. Kalau jumlah test skip berubah, cek daftar itu lebih dulu.
+`QUEUE_DISABLE_REDIS=1` memaksa test Redis dilewati saat runner memang tidak punya Redis.
+
 **Kasus inti:**
 1. **Reminder fire** → job scheduler → `POST /internal/jobs/reminder` → notification WA mock dipanggil dengan benar → `reminder_logs` terisi.
 2. **Konfirmasi WA**: webhook dengan signature valid + `button_reply.id=CONFIRM_TAKEN_s1` → compliance log `CONFIRMED`, eskalasi aktif dibatalkan.

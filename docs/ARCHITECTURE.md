@@ -166,8 +166,9 @@ Semua integration di `apps/api/src/integrations/*`, masing-masing punya interfac
 
 ### 3.6 Infrastructure
 - Vercel → web dashboard; Railway/Render → API + worker + cron.
-- `docker-compose.yml` lokal: postgres + redis.
-- Env via `.env` (lihat [AGENTS.md](AGENTS.md#environment-variables)).
+- Supabase PostgreSQL (managed) untuk staging & production; `docker-compose.yml` lokal untuk development.
+- `DATABASE_URL` (runtime, boleh connection pooler) dan `DIRECT_URL` (koneksi non-pooler untuk `prisma migrate deploy`) — hanya ada di backend.
+- Env via `.env` (lihat [AGENTS.md](../AGENTS.md#environment-variables)).
 
 ---
 
@@ -407,4 +408,4 @@ Scope MVP: ~10k pasien. Kebutuhan skala berikutnya dipetakan, bukan dibangun:
 - **Metric MVP**: reminder sent/failed, confirmation latency, escalation time-to-handle, anomaly count, false-positive rate, WS connections.
 - **Alert**: tidak perlu tooling berat — dashboard sederhana `/health` + log review; untuk demo, gunakan log panel Railway/Render.
 - **Recovery**: job queue persist memastikan eskalasi yang tertunda dieksekusi ulang setelah restart. Webhook idempoten. DB backup harian (disediakan platform deploy).
-- **Health check**: `/healthz` (app + db + redis + wa status) dihit 1x/menit.
+- **Health check**: `/healthz` = liveness (proses hidup saja, tidak menyentuh dependency). `/readyz` = readiness (database, Redis, dan versi migration; `503` bila ada yang gagal). Platform deliver harus memakai `/healthz` untuk restart policy dan `/readyz` untuk load balancer. Lihat [docs/DEPLOYMENT.md](DEPLOYMENT.md).

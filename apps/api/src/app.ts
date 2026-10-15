@@ -6,6 +6,8 @@ import jwt from '@fastify/jwt'
 import rateLimit from '@fastify/rate-limit'
 import { getEnv } from './lib/env'
 import { registerErrorHandler } from './lib/errors'
+import { registerHealthRoutes } from './lib/health'
+import { closeRedis } from './lib/redis'
 import { registerRoutes } from './routes'
 
 import { createDashboardWsServer, getDashboardWsServer, setDashboardWsServer } from './modules/dashboard/ws'
@@ -61,11 +63,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   registerErrorHandler(app)
 
-  app.get('/healthz', async () => ({
-    status: 'ok',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  }))
+  // `/healthz` (liveness) tidak menyentuh dependency; `/readyz` memeriksa database,
+  // Redis, dan versi migration. Penjelasan pemisahan ada di lib/health.ts.
+  registerHealthRoutes(app)
 
   registerRoutes(app)
 
@@ -105,6 +105,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   if (opts.enableEscalationScheduler === true) {
     registerEscalationScheduler(app)
   }
+
+  // Koneksi Redis (OTP store) ikut ditutup supaya `docker stop`/deploy tidak
+  // menggantung di socket yang masih terbuka.
+  app.addHook('onClose', async () => {
+    await closeRedis()
+  })
 
   return app
 }

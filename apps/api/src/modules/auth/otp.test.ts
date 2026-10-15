@@ -153,7 +153,7 @@ describe('verifyOtp — penandaan verifikasi', () => {
       },
     }
 
-    deps.store.set('081200000001', {
+    await deps.store.set('081200000001', {
       code: '123456',
       expiresAtMs: 10_000,
       issuedAtMs: 1_000,
@@ -186,7 +186,7 @@ describe('verifyOtp — penandaan verifikasi', () => {
       },
     }
 
-    deps.store.set('081200000001', {
+    await deps.store.set('081200000001', {
       code: '123456',
       expiresAtMs: 10_000,
       issuedAtMs: 1_000,

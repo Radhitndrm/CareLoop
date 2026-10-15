@@ -91,9 +91,25 @@ describe('parseEnv — env invalid ditolak dengan pesan jelas', () => {
 
   it('production tanpa CORS_ORIGINS', () => {
     expect(issuesOf({ NODE_ENV: 'production' })[0]?.key).toBe('CORS_ORIGINS')
-    expect(parse({ NODE_ENV: 'production', CORS_ORIGINS: 'https://careloop.dev' }).NODE_ENV).toBe(
-      'production',
+  })
+
+  it('production wajib menyertakan REDIS_URL dan DIRECT_URL', () => {
+    const keys = issuesOf({ NODE_ENV: 'production', CORS_ORIGINS: 'https://careloop.dev' }).map(
+      (i) => i.key,
     )
+    expect(keys).toEqual(expect.arrayContaining(['REDIS_URL', 'DIRECT_URL']))
+
+    const env = parse({
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://careloop.dev',
+      REDIS_URL: 'rediss://cache.example:6379',
+      DIRECT_URL: VALID.DATABASE_URL,
+    })
+    expect(env.REDIS_URL).toBe('rediss://cache.example:6379')
+  })
+
+  it('REDIS_URL kosong di development tetap boleh (demo in-process)', () => {
+    expect(parse({ NODE_ENV: 'development' }).REDIS_URL).toBeUndefined()
   })
 
   it('TEST_DATABASE_URL sama dengan DATABASE_URL', () => {
