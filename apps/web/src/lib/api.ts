@@ -1,6 +1,30 @@
 import type { DashboardFilterInput } from '@careloop/shared'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+/**
+ * Base URL API publik. `NEXT_PUBLIC_API_URL` di-inline Next saat build, jadi satu-
+ * satunya sumber kebenaran di produksi.
+ *
+ * Fallback `localhost` HANYA untuk development — di production URL yang salah
+ * berarti dashboard diam-diam menembak API yang tidak ada (atau, lebih buruk, API
+ * lain). Di situ build harus gagal lebih dulu daripada deploy diam-diam.
+ */
+function resolveApiBaseUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim()
+  if (configured) return configured.replace(/\/+$/, '')
+
+  if (process.env.NODE_ENV !== 'production') return 'http://localhost:4000'
+
+  throw new Error(
+    'NEXT_PUBLIC_API_URL wajib diisi saat build production (contoh: https://api-careloop.up.railway.app)',
+  )
+}
+
+let cachedBaseUrl: string | undefined
+
+export function apiBaseUrl(): string {
+  cachedBaseUrl ??= resolveApiBaseUrl()
+  return cachedBaseUrl
+}
 
 export interface ApiUser {
   id: string
@@ -166,7 +190,7 @@ async function fetchWithAuth<T>(path: string, options: RequestInit = {}): Promis
     headers.set('Authorization', `Bearer ${token}`)
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${apiBaseUrl()}${path}`, {
     ...options,
     headers,
   })
@@ -188,7 +212,7 @@ async function fetchWithMeta<T, M>(path: string): Promise<{ data: T; meta?: M }>
   const headers = new Headers({ Accept: 'application/json' })
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { headers })
+  const response = await fetch(`${apiBaseUrl()}${path}`, { headers })
   const json = await response.json().catch(() => ({}))
 
   if (!response.ok) {

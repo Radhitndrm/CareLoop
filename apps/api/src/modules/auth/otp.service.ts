@@ -1,9 +1,11 @@
 // CL-007: login OTP pasien & keluarga (mock).
-// Kode disimpan di memori proses — cukup untuk demo satu instance, tetapi hilang saat
-// restart dan tidak dibagi antar replika. Pemindahan ke Redis dilakukan di CL-401.
+// Kode disimpan lewat `OtpStore` yang bisa persisten: `RedisOtpStore` untuk
+// cloud/multi-instance (lihat otp.store.ts) dan `InMemoryOtpStore` untuk dev &
+// unit test. Anti-enumeration tetap sama apa pun backing store-nya.
 import type { AuthSession, AuthUserClaims, OtpChallenge, UserRole } from '@careloop/shared'
 import { rateLimited, unauthorized } from '../../lib/errors'
 import { getEnv } from '../../lib/env'
+import { createOtpStore, type OtpRecord, type OtpStore } from './otp.store'
 import type { AuthUserRecord } from './auth.service'
 
 /** Hanya pasien & keluarga yang login lewat OTP. Nakes/admin memakai kata sandi (CL-006). */
@@ -12,43 +14,9 @@ export const OTP_LOGIN_ROLES: readonly UserRole[] = ['PATIENT', 'FAMILY']
 /** Pesan tunggal untuk semua kegagalan verifikasi — jangan bocorkan penyebabnya. */
 const INVALID_OTP = 'Kode OTP salah atau sudah kedaluwarsa'
 
-export interface OtpRecord {
-  /** null = nomor tidak terdaftar; challenge tetap dibuat agar respons tak bisa dibedakan. */
-  code: string | null
-  expiresAtMs: number
-  issuedAtMs: number
-  attemptsLeft: number
-}
-
-export interface OtpStore {
-  get(phone: string): OtpRecord | undefined
-  set(phone: string, record: OtpRecord): void
-  delete(phone: string): void
-}
-
-export class InMemoryOtpStore implements OtpStore {
-  private readonly records = new Map<string, OtpRecord>()
-
-  get(phone: string): OtpRecord | undefined {
-    return this.records.get(phone)
-  }
-
-  set(phone: string, record: OtpRecord): void {
-    this.evictExpired(record.issuedAtMs)
-    this.records.set(phone, record)
-  }
-
-  delete(phone: string): void {
-    this.records.delete(phone)
-  }
-
-  /** Dibersihkan saat ada penulisan baru agar Map tidak tumbuh tanpa batas. */
-  private evictExpired(nowMs: number): void {
-    for (const [phone, record] of this.records) {
-      if (record.expiresAtMs <= nowMs) this.records.delete(phone)
-    }
-  }
-}
+// Re-export supaya pemanggil lama (route, test, modul lain) tetap cukup satu import.
+export { InMemoryOtpStore, RedisOtpStore, createOtpStore } from './otp.store'
+export type { OtpRecord, OtpStore } from './otp.store'
 
 export interface OtpConfig {
   ttlSec: number
@@ -89,7 +57,7 @@ export async function requestOtp(
   phone: string,
 ): Promise<OtpChallenge> {
   const nowMs = deps.now()
-  const existing = deps.store.get(phone)
+  const existing = await deps.store.get(phone)
 
   if (existing) {
     const elapsedSec = Math.floor((nowMs - existing.issuedAtMs) / 1000)
@@ -104,7 +72,7 @@ export async function requestOtp(
   const user = await deps.findUser(phone)
   const eligible = user !== null && user.isActive && OTP_LOGIN_ROLES.includes(user.role)
 
-  deps.store.set(phone, {
+  await deps.store.set(phone, {
     code: eligible ? (config.mockCode ?? deps.randomCode()) : null,
     expiresAtMs: nowMs + config.ttlSec * 1000,
     issuedAtMs: nowMs,
@@ -122,28 +90,33 @@ export async function verifyOtp(
   input: { phone: string; otp: string },
   expiresInSec: number,
 ): Promise<AuthSession> {
-  const record = deps.store.get(input.phone)
+  const record = await deps.store.get(input.phone)
   const nowMs = deps.now()
 
   if (!record || record.expiresAtMs <= nowMs || record.attemptsLeft <= 0) {
-    deps.store.delete(input.phone)
+    await deps.store.delete(input.phone)
     throw unauthorized(INVALID_OTP)
   }
 
   if (record.code === null || record.code !== input.otp) {
-    // Percobaan dikurangi lebih dulu supaya brute force tetap terbatas walau kodenya benar.
-    deps.store.set(input.phone, { ...record, attemptsLeft: record.attemptsLeft - 1 })
+    // Percobaan dikurangi oleh store (atomik di Redis), bukan di memori proses ini,
+    // supaya dua replika tidak bisa sama-sama memakai sisa percobaan yang sama.
+    await deps.store.consumeAttempt(input.phone)
     throw unauthorized(INVALID_OTP)
   }
 
   const user = await deps.findUser(input.phone)
   if (!user || !user.isActive || !OTP_LOGIN_ROLES.includes(user.role)) {
-    deps.store.delete(input.phone)
+    await deps.store.delete(input.phone)
     throw unauthorized(INVALID_OTP)
   }
 
-  // Kode sekali pakai: hapus sebelum token diterbitkan.
-  deps.store.delete(input.phone)
+  // Kode sekali pakai: ambil-hapus secara atomik sebelum token diterbitkan, supaya
+  // dua permintaan bersamaan dengan kode sama tidak bisa dua-duanya berhasil.
+  const consumed = await deps.store.consume(input.phone)
+  if (!consumed || consumed.code !== input.otp || consumed.expiresAtMs <= nowMs) {
+    throw unauthorized(INVALID_OTP)
+  }
 
   // Verifikasi nomor adalah satu-satunya jalan menaikkan `is_verified`. Sengaja
   // dilakukan setelah kode dicocokkan, bukan saat kode diminta.
@@ -171,19 +144,25 @@ export async function verifyOtp(
  * Satu store OTP untuk seluruh proses, bukan satu per route.
  *
  * Sebelumnya `POST /v1/auth/otp/request` dan alur verifikasi pasien sama-sama
- * membuat `InMemoryOtpStore` sendiri. Kalau registration mengirim instruksi lewat
+ * membuat store OTP sendiri. Kalau registration mengirim instruksi lewat
  * jalur berbeda, keduanya akan menerbitkan kode yang saling menimpa dan cooldown
- * tidak berlaku di sana — pasien bisa Asking kode berulang tanpa jeda.
+ * tidak berlaku di sana — pasien bisa meminta kode berulang tanpa jeda.
  */
-let sharedStore: OtpStore = new InMemoryOtpStore()
+let sharedStore: OtpStore | undefined
 
 export function getOtpStore(): OtpStore {
+  sharedStore ??= createOtpStore()
   return sharedStore
 }
 
 /** Hanya untuk test: mengganti store mengisolasi state antar suite. */
 export function setOtpStore(store: OtpStore): void {
   sharedStore = store
+}
+
+/** Untuk test: buang store bersama supaya suite berikutnya mendapat store baru. */
+export function resetOtpStore(): void {
+  sharedStore = undefined
 }
 
 /** Konfigurasi OTP dibaca dari env di satu tempat (docs/API.md §2). */
@@ -216,7 +195,7 @@ export async function requestPatientOtp(
   deps: { store: OtpStore; now: () => number },
 ): Promise<OtpChallenge> {
   const nowMs = deps.now()
-  const existing = deps.store.get(input.phone)
+  const existing = await deps.store.get(input.phone)
 
   if (existing) {
     const elapsedSec = Math.floor((nowMs - existing.issuedAtMs) / 1000)
@@ -228,7 +207,7 @@ export async function requestPatientOtp(
     }
   }
 
-  deps.store.set(input.phone, {
+  await deps.store.set(input.phone, {
     code: config.mockCode ?? generateOtpCode(),
     expiresAtMs: nowMs + config.ttlSec * 1000,
     issuedAtMs: nowMs,
