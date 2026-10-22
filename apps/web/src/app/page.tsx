@@ -1,18 +1,8 @@
-import type { CSSProperties } from 'react'
+'use client'
+
 import Link from 'next/link'
-import {
-  ActivityIcon,
-  ArrowUpRightIcon,
-  BellRingIcon,
-  CheckCircleIcon,
-  FilterIcon,
-  LayoutDashboardIcon,
-  PillIcon,
-  ShieldAlertIcon,
-  StethoscopeIcon,
-  TriangleAlertIcon,
-  UsersIcon,
-} from 'lucide-react'
+import { motion } from 'motion/react'
+import { ActivityIcon, ArrowUpRightIcon, BellRingIcon, CheckCircleIcon, FilterIcon, LayoutDashboardIcon, PillIcon, ShieldAlertIcon, StethoscopeIcon, TriangleAlertIcon, UsersIcon } from 'lucide-react'
 import { BrandMark } from '@/components/brand'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -72,11 +62,14 @@ const FLOW = [
   },
 ]
 
+// Kurva perlambatan halus (smooth deceleration) ala Apple iOS
+const SMOOTH_EASE = [0.16, 1, 0.3, 1] as const
+
 export default function HomePage() {
   return (
     <div className="app-workspace min-h-screen w-full">
       <header className="app-topbar">
-        <div className="topbar-inner mx-auto w-full max-w-[1440px] px-4 md:px-7 lg:px-8">
+        <div className="topbar-inner mx-auto w-full max-w-360 px-4 md:px-7 lg:px-8">
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
             <BrandMark />
             <span className="min-w-0">
@@ -100,9 +93,15 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1440px] space-y-7 px-4 py-10 md:px-7 md:py-14 lg:px-8">
-        <section className="reveal grid items-center gap-8 lg:grid-cols-[1.1fr_1fr]">
-          <div>
+      <main className="mx-auto w-full max-w-360 space-y-12 px-4 py-10 md:px-7 md:py-14 lg:px-8">
+        <section className="grid items-center gap-8 lg:grid-cols-[1.1fr_1fr]">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, ease: SMOOTH_EASE }}
+            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+            className="transform-[translateZ(0)]"
+          >
             <p className="page-kicker">
               <span aria-hidden="true" />
               SDG 3 · Digital Health
@@ -137,63 +136,90 @@ export default function HomePage() {
               </Badge>
               <Badge variant="neutral">Data demo sintetis</Badge>
             </div>
-          </div>
+          </motion.div>
 
-          <Card className="card-fold">
-            <CardHeader>
-              <CardTitle>Alur utama platform</CardTitle>
-              <CardDescription>Tiga langkah inti platform.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ol className="space-y-4">
-                {FLOW.map((item) => (
-                  <li key={item.step} className="flex gap-3">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
-                      <item.icon className="size-5" aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="font-medium">{item.title}</p>
-                      <p className="mt-0.5 text-sm text-muted-foreground">{item.body}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </CardContent>
-          </Card>
+          <motion.div
+            initial={{ opacity: 0, y: 32 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.15, ease: SMOOTH_EASE }}
+            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+            className="transform-[translateZ(0)]"
+          >
+            <Card className="card-fold">
+              <CardHeader>
+                <CardTitle>Alur utama platform</CardTitle>
+                <CardDescription>Tiga langkah inti platform.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ol className="space-y-4">
+                  {FLOW.map((item) => (
+                    <li key={item.step} className="flex gap-3">
+                      <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
+                        <item.icon className="size-5" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="font-medium">{item.title}</p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">{item.body}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </CardContent>
+            </Card>
+          </motion.div>
         </section>
 
-        <section className="reveal space-y-5">
-          <div>
+        <section className="space-y-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.5, ease: SMOOTH_EASE }}
+          >
             <p className="page-kicker">
               <span aria-hidden="true" />
               Fitur utama
             </p>
             <h2 className="page-title">Semua yang dibutuhkan petugas kesehatan</h2>
-          </div>
+          </motion.div>
 
+          {/* Grid kartu dengan animasi meluncur naik saat masuk viewport / refresh */}
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {FEATURES.map((feature, index) => (
-              <Card
+              <motion.div
                 key={feature.title}
-                className="reveal"
-                style={{ '--reveal-index': index } as CSSProperties}
+                initial={{ opacity: 0, y: 32 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.15 }}
+                transition={{
+                  duration: 0.5,
+                  delay: index * 0.08,
+                  ease: SMOOTH_EASE,
+                }}
+                style={{
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden',
+                }}
+                className="h-full transform-[translateZ(0)]"
               >
-                <CardHeader>
-                  <span className="grid size-10 place-items-center rounded-xl bg-accent text-primary">
-                    <feature.icon className="size-5" aria-hidden="true" />
-                  </span>
-                  <CardTitle>{feature.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-relaxed text-muted-foreground">{feature.body}</p>
-                </CardContent>
-              </Card>
+                <Card className="h-full">
+                  <CardHeader>
+                    <span className="grid size-10 place-items-center rounded-xl bg-accent text-primary">
+                      <feature.icon className="size-5" aria-hidden="true" />
+                    </span>
+                    <CardTitle>{feature.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm leading-relaxed text-muted-foreground">{feature.body}</p>
+                  </CardContent>
+                </Card>
+              </motion.div>
             ))}
           </div>
         </section>
       </main>
 
-      <footer className="mx-auto flex w-full max-w-[1440px] flex-wrap justify-between gap-2 border-t px-4 py-6 text-xs text-muted-foreground md:px-7 lg:px-8">
+      <footer className="mx-auto flex w-full max-w-360 flex-wrap justify-between gap-2 border-t px-4 py-6 text-xs text-muted-foreground md:px-7 lg:px-8">
         <span>CareLoop · Kepatuhan pengobatan &amp; deteksi darurat.</span>
         <span className="flex items-center gap-1">
           Data demo sintetis, bukan data pasien riil
