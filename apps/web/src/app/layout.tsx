@@ -17,6 +17,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CareLoop — Dashboard Nakes",
   description: "Dashboard monitoring kepatuhan & darurat (hackathon SDG 3)",
+  icons: {
+    icon: [
+      { url: "/logo.png", type: "image/png" },
+      { url: "/favicon.ico" },
+    ],
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

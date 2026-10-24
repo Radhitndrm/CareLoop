@@ -1,11 +1,24 @@
 import Link from 'next/link'
-import { HeartPulseIcon } from 'lucide-react'
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
 export function BrandMark({ className }: { className?: string }) {
   return (
-    <span className={cn('brand-mark', className)} aria-hidden="true">
-      <HeartPulseIcon className="size-5" strokeWidth={2.4} />
+    <span
+      className={cn(
+        'relative flex shrink-0 items-center justify-center',
+        className,
+      )}
+      aria-hidden="true"
+    >
+      <Image
+        src="/logo.png"
+        alt="CareLoop"
+        width={58}
+        height={40}
+        className="h-10 w-auto object-contain transition-transform duration-200"
+        priority
+      />
     </span>
   )
 }
@@ -17,11 +30,17 @@ export function BrandMark({ className }: { className?: string }) {
  */
 export function BrandLockup({ caption }: { caption?: string }) {
   return (
-    <Link href="/dashboard" className="brand-lockup shrink-0" aria-label="CareLoop, beranda">
+    <Link
+      href="/dashboard"
+      className="brand-lockup group shrink-0 flex items-center gap-2.5"
+      aria-label="CareLoop, beranda"
+    >
       <BrandMark />
       <span className="hidden min-w-0 sm:flex sm:flex-col justify-center">
-        <span className="brand-name block">CareLoop</span>
-        <span className="brand-caption hidden xl:block truncate max-w-50">
+        <span className="brand-name block leading-tight font-semibold text-foreground group-hover:text-primary transition-colors">
+          CareLoop
+        </span>
+        <span className="brand-caption hidden xl:block truncate text-xs text-muted-foreground max-w-50">
           {caption ?? 'Monitoring Kepatuhan & Darurat'}
         </span>
       </span>
