@@ -81,16 +81,21 @@ describe('Cegah kebocoran data antar-puskesmas', () => {
     }) as any)
 
     vi.spyOn(prisma.patient as any, 'findFirst').mockImplementation(async ({ where }: any) => {
-      const clauses: any[] = where?.AND ?? []
+      const clauses: any[] = where?.AND ?? (where ? [where] : [])
       const idClause = clauses.find((c: any) => c?.id) ?? (where?.id ? where : null)
-      const districtClause = clauses.find((c: any) => c?.districtCode)
       const found = patients.find((p) => (idClause?.id ? p.id === idClause.id : true))
       if (!found) return null
-      if (districtClause && !(districtClause.districtCode?.in ?? []).includes(found.districtCode)) {
+      const allowed = collectDistrictCodes(where)
+      if (allowed && !allowed.includes(found.districtCode)) {
         return null
       }
       return { id: found.id }
     })
+
+    vi.spyOn(prisma.patient as any, 'findUnique').mockImplementation((async ({ where }: any) => {
+      const p = patients.find((p) => p.id === where?.id)
+      return p ? { id: p.id, districtCode: p.districtCode, user: { fullName: 'Pasien Test', phone: '0812345678' } } : null
+    }) as any)
 
     vi.spyOn(prisma.escalationRun, 'findMany').mockImplementation((async ({ where }: any) => {
       const runs = [
@@ -113,7 +118,9 @@ describe('Cegah kebocoran data antar-puskesmas', () => {
     }) as any)
 
     vi.spyOn(prisma.familyContact, 'findFirst').mockImplementation((async ({ where }: any) =>
-      where?.patientId === PATIENT_IN ? { id: 'c-1', userId: 'family-in' } : null) as any)
+      where?.patientId === PATIENT_IN && (!where?.userId || where.userId === 'family-in')
+        ? { id: 'c-1', userId: 'family-in' }
+        : null) as any)
 
     vi.spyOn(prisma.emergencyAlert, 'findMany').mockImplementation((async ({ where }: any) => {
       const alerts = [

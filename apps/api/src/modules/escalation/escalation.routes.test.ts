@@ -41,6 +41,9 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
     if (prisma.nakesContact) {
       vi.spyOn(prisma.nakesContact, 'findMany').mockResolvedValue([])
     }
+    if (prisma.nakesAssignment) {
+      vi.spyOn(prisma.nakesAssignment, 'findMany').mockResolvedValue([] as any)
+    }
   })
 
   // Route eskalasi kini bertoken (sebelumnya terbuka tanpa autentikasi).
