@@ -582,6 +582,7 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
+  flex-shrink: 0;
 }
 .brand-mark {
   display: grid;
@@ -617,6 +618,8 @@
   border-radius: 999px;
   padding-inline: 12px;
   font-size: 0.83rem;
+  flex-shrink: 0;
+  white-space: nowrap;
   color: color-mix(in srgb, var(--foreground) 72%, transparent);
   transition:
     background-color 180ms ease,

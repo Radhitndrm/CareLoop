@@ -7,13 +7,23 @@ import {
   ActivityIcon,
   BellRingIcon,
   Building2Icon,
+  ChevronDownIcon,
   ClipboardListIcon,
   LayoutDashboardIcon,
   MessageCircleIcon,
+  MoreHorizontalIcon,
   PillIcon,
   UsersIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 const ICONS = {
   dashboard: LayoutDashboardIcon,
@@ -46,12 +56,14 @@ export function NavLinks({
   onNavigate,
   showGroups = false,
   className,
+  maxVisible = 5,
 }: {
   items: NavItem[]
   orientation?: 'horizontal' | 'vertical'
   onNavigate?: () => void
   showGroups?: boolean
   className?: string
+  maxVisible?: number
 }) {
   const pathname = usePathname()
 
@@ -67,6 +79,13 @@ export function NavLinks({
         )
       : new Set<string>()
 
+  // Jika horizontal dan jumlah item melebihi batas, pisahkan ke dropdown overflow ("...").
+  const isHorizontal = orientation === 'horizontal'
+  const hasOverflow = isHorizontal && items.length > maxVisible
+  const visibleItems = hasOverflow ? items.slice(0, maxVisible) : items
+  const overflowItems = hasOverflow ? items.slice(maxVisible) : []
+  const hasActiveOverflow = overflowItems.some((item) => isNavItemActive(pathname, item))
+
   return (
     <nav
       aria-label="Menu utama"
@@ -75,7 +94,7 @@ export function NavLinks({
         className,
       )}
     >
-      {items.map((item) => {
+      {visibleItems.map((item) => {
         const Icon = ICONS[item.icon]
         const active = isNavItemActive(pathname, item)
         return (
@@ -97,6 +116,73 @@ export function NavLinks({
           </Fragment>
         )
       })}
+
+      {/* Menu dropdown titik tiga / Lainnya untuk item yang meluap */}
+      {hasOverflow && overflowItems.length > 0 ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                'topbar-nav-item cursor-pointer gap-1.5',
+                hasActiveOverflow && 'is-active',
+              )}
+              aria-label="Menu navigasi lainnya"
+              title="Menu lainnya"
+            >
+              <span className="topbar-nav-icon" aria-hidden="true">
+                <MoreHorizontalIcon className="size-[15px] shrink-0" />
+              </span>
+              <span className="nav-item-label hidden xl:inline">Lainnya</span>
+              <ChevronDownIcon className="size-3 opacity-60" aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 p-1.5">
+            {overflowItems.map((item, idx) => {
+              const Icon = ICONS[item.icon]
+              const active = isNavItemActive(pathname, item)
+              const prevItem = overflowItems[idx - 1]
+              const showHeader = item.group && item.group !== prevItem?.group
+              return (
+                <Fragment key={item.href}>
+                  {showHeader ? (
+                    <>
+                      {idx > 0 ? <DropdownMenuSeparator /> : null}
+                      <DropdownMenuLabel>{item.group}</DropdownMenuLabel>
+                    </>
+                  ) : null}
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href={item.href}
+                      onClick={onNavigate}
+                      className={cn(
+                        'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors',
+                        active
+                          ? 'bg-primary/10 text-primary font-semibold'
+                          : 'text-foreground/80 hover:bg-accent hover:text-foreground',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'grid size-6 place-items-center rounded-md',
+                          active ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+                        )}
+                        aria-hidden="true"
+                      >
+                        <Icon className="size-3.5 shrink-0" />
+                      </span>
+                      <span className="flex-1">{item.label}</span>
+                      {active ? (
+                        <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
+                      ) : null}
+                    </Link>
+                  </DropdownMenuItem>
+                </Fragment>
+              )
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
     </nav>
   )
 }
