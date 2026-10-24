@@ -33,6 +33,9 @@ const MAX_SLOT_LOOKBACK_STEPS = 10
 /** Fallback bila env tidak terbaca (mis. unit test di luar konteks server). */
 const DEFAULT_MAX_LATE_MINUTES = 1440
 
+/** Fallback `COMPLIANCE_DEFER_MINUTES` bila env tidak terbaca. */
+const DEFAULT_DEFER_MINUTES = 15
+
 export type CompliancePrismaClient = {
   schedule: {
     findUnique(args: any): Promise<any>
@@ -40,6 +43,7 @@ export type CompliancePrismaClient = {
   complianceLog: {
     findUnique(args: any): Promise<any>
     create(args: any): Promise<any>
+    update(args: any): Promise<any>
     findMany(args: any): Promise<any[]>
     count(args: any): Promise<number>
     groupBy(args: any): Promise<any[]>
@@ -132,6 +136,52 @@ function defaultMaxLateMinutes(): number {
   }
 }
 
+function defaultDeferMinutes(): number {
+  try {
+    return getEnv().COMPLIANCE_DEFER_MINUTES
+  } catch {
+    return DEFAULT_DEFER_MINUTES
+  }
+}
+
+/**
+ * Baca schedule beserta kolom yang dibutuhkan penentuan slot, lalu tegakkan gate klinis:
+ * resep yang belum disahkan dokter tidak boleh ditutup apa pun — baik "sudah diminum"
+ * maupun "ditunda", karena keduanya menyatakan pasien sudah menerima obat resmi.
+ */
+async function loadConfirmableSchedule(
+  client: CompliancePrismaClient,
+  scheduleId: string,
+): Promise<any> {
+  const schedule = await client.schedule.findUnique({
+    where: { id: scheduleId },
+    select: {
+      id: true,
+      patientId: true,
+      medicationId: true,
+      timeOfDay: true,
+      daysOfWeek: true,
+      timeWindowMinutes: true,
+      startDate: true,
+      endDate: true,
+      status: true,
+      patient: { select: { user: { select: { timezone: true } } } },
+    },
+  })
+
+  if (!schedule) {
+    throw notFound(`Jadwal ${scheduleId} tidak ditemukan`)
+  }
+
+  // Jadwal tanpa kolom status dibaca sebagai APPROVED agar data lama yang belum
+  // dimigrasikan tidak ikut kehilangan konfirmasi.
+  if (schedule.status && schedule.status !== 'APPROVED') {
+    throw invalidTransition('Preskripsi ini belum disetujui dokter')
+  }
+
+  return schedule
+}
+
 export interface ConfirmSlot {
   scheduledAt: Date | null
   maxLateMinutes: number
@@ -195,33 +245,7 @@ export async function confirmMedicationIntake(
   client: CompliancePrismaClient,
   input: ConfirmIntakeInput,
 ): Promise<ConfirmIntakeResult> {
-  const schedule = await client.schedule.findUnique({
-    where: { id: input.scheduleId },
-    select: {
-      id: true,
-      patientId: true,
-      medicationId: true,
-      timeOfDay: true,
-      daysOfWeek: true,
-      timeWindowMinutes: true,
-      startDate: true,
-      endDate: true,
-      status: true,
-      patient: { select: { user: { select: { timezone: true } } } },
-    },
-  })
-
-  if (!schedule) {
-    throw notFound(`Jadwal ${input.scheduleId} tidak ditemukan`)
-  }
-
-  // Preskripsi yang belum disahkan dokter tidak boleh dikonfirmasi: konfirmasi
-  // berarti pasien minum obat resmi, dan itu menyesatkan bila resepnya masih draft
-  // (docs/API.md §3.2). Jadwal tanpa kolom status dibaca sebagai APPROVED agar
-  // data lama yang belum dimigrasikan tidak ikut kehilangan konfirmasi.
-  if (schedule.status && schedule.status !== 'APPROVED') {
-    throw invalidTransition('Preskripsi ini belum disetujui dokter')
-  }
+  const schedule = await loadConfirmableSchedule(client, input.scheduleId)
 
   const confirmedAt = input.now ?? new Date()
   const slot = resolveConfirmSlot(
@@ -272,10 +296,58 @@ export async function confirmMedicationIntake(
     constraint: ['scheduleId', 'scheduledAt'],
   })
 
-  if (!created) {
+if (!created) {
+    // Slot yang sudah ditunda lalu dikonfirmasi: pasien berubah pikiran, dan itu
+    // jawaban yang valid — baris yang sama dinaikkan statusnya, bukan ditolak 409.
+    // Tanpa cabang ini "Tunda 15 menit" jadi jebakan: konfirmasi berikutnya selalu gagal.
+    if (log.status === ComplianceStatus.TUNDA) {
+      const upgraded = await client.complianceLog.update({
+        where: { id: log.id },
+        data: {
+          status,
+          confirmedAt,
+          channel: input.channel,
+          sourceMessageId: input.sourceMessageId ?? null,
+          notes: input.notes ?? null,
+        },
+      })
+      const upgradedRun = await resolveActiveEscalation(
+        client,
+        schedule,
+        input.actorUserId,
+        input.notes,
+      )
+
+      await tryCreateAuditLog(client as any, {
+        action: 'compliance.confirmed',
+        actorUserId: input.actorUserId ?? schedule.patientId,
+        actorRole: 'PATIENT',
+        resourceType: 'compliance_log',
+        resourceId: upgraded.id,
+        patientId: schedule.patientId,
+        meta: {
+          scheduleId: schedule.id,
+          channel: input.channel,
+          status,
+          scheduledAt: scheduledAt.toISOString(),
+          confirmedAt: confirmedAt.toISOString(),
+          upgradedFromDeferred: true,
+          escalationRunId: upgradedRun?.id ?? null,
+        },
+      })
+
+      return {
+        log: upgraded,
+        scheduledAt,
+        status,
+        escalationRunId: upgradedRun?.id ?? null,
+        escalationResolved: Boolean(upgradedRun),
+      }
+    }
+
     // Perbaikan parsial: kalau percobaan sebelumnya berhasil menulis log tapi gagal menutup
     // eskalasi, percobaan ulang ini akan mendarat di cabang 409. Tutup dulu agar pasien
-    // yang sudah konfirmasi tidak tetap mendapat alert keluarga, baru laporkan duplikat.
+    // yang sudah konfirmasi tidak tetap mendapat alert keluarga, lalu laporkan duplikat.
     await resolveActiveEscalation(client, schedule, input.actorUserId, input.notes)
 
     throw alreadyProcessed(
@@ -317,6 +389,183 @@ export async function confirmMedicationIntake(
     escalationRunId: activeRun?.id ?? null,
     escalationResolved: Boolean(activeRun),
   }
+}
+
+export interface DeferIntakeInput {
+  scheduleId: string
+  channel: ComplianceChannel
+  /** Berapa menit penundaan. Default `COMPLIANCE_DEFER_MINUTES`. */
+  minutes?: number
+  notes?: string | null
+  actorUserId?: string | null
+  sourceMessageId?: string | null
+  now?: Date
+}
+
+export interface DeferExecutionDeps {
+  /**
+   * Antrekan reminder susulan. Default `getReminderJobQueue().schedule(...)`; disuntik di
+   * test dan bila pemanggil memang tidak punya queue.
+   */
+  enqueueReminder?: (input: { scheduleId: string; dueAt: Date }) => Promise<string>
+}
+
+export interface DeferIntakeResult {
+  log: any
+  scheduledAt: Date
+  deferredUntil: Date
+  minutes: number
+  /** Id job reminder susulan; null bila tidak ada queue yang disuntikkan. */
+  reminderJobId: string | null
+  /** Run eskalasi yang tetap berjalan — pasien merespons, tapi belum minum. */
+  escalationRunId: string | null
+  /** true bila slot sudah pernah ditunda: reply kedua tidak menambah reminder susulan. */
+  alreadyDeferred: boolean
+}
+
+/**
+ * Tandai slot jatuh tempo sebagai `TUNDA` lalu minta pengingat diulang (FR-2.4 / AC-2.4).
+ *
+ * Dua keputusan yang disengaja:
+ *
+ *   - Slot dicatat `TUNDA`, bukan dibiarkan `PENDING`: pasien sudah membalas dengan jujur
+ *     "belum siap". Tanpa baris ini angka adherence menghitung slot itu sebagai belum
+ *     dijawab, dan angka kepatuhan bukan lagi data.
+ *   - Run eskalasi dibiarkan terbuka. Menunda bukan berarti minum, jadi alarm tetap
+ *     harus berbunyi kalau pasien akhirnya tidak minum (FR-3.1).
+ *
+ * Konfirmasi berikutnya pada slot yang sama menaikkan baris `TUNDA` itu menjadi
+ * `CONFIRMED`/`CONFIRMED_LATE` — bukan 409.
+ */
+export async function deferMedicationIntake(
+  client: CompliancePrismaClient,
+  input: DeferIntakeInput,
+  deps: DeferExecutionDeps = {},
+): Promise<DeferIntakeResult> {
+  const schedule = await loadConfirmableSchedule(client, input.scheduleId)
+
+  const deferredAt = input.now ?? new Date()
+  const slot = resolveConfirmSlot(
+    { ...schedule, timezone: schedule.patient?.user?.timezone ?? undefined },
+    { now: deferredAt },
+  )
+
+  if (!slot.scheduledAt) {
+    throw invalidTransition(
+      `Tidak ada jadwal yang jatuh tempo dalam ${slot.maxLateMinutes} menit terakhir`,
+    )
+  }
+
+  if (slot.tooLate) {
+    throw invalidTransition(
+      `Penundaan lewat ${slot.maxLateMinutes} menit dari waktu jadwal — slot sudah basi`,
+    )
+  }
+
+  const scheduledAt = slot.scheduledAt
+  const minutes = Math.max(1, Math.floor(input.minutes ?? defaultDeferMinutes()))
+  const deferredUntil = new Date(deferredAt.getTime() + minutes * MINUTE_MS)
+
+  const { created, value: log } = await runOnce({
+    create: () =>
+      client.complianceLog.create({
+        data: {
+          patientId: schedule.patientId,
+          scheduleId: schedule.id,
+          medicationId: schedule.medicationId,
+          scheduledAt,
+          confirmedAt: null,
+          status: ComplianceStatus.TUNDA,
+          channel: input.channel,
+          sourceMessageId: input.sourceMessageId ?? null,
+          notes: input.notes ?? `Pasien menunda ${minutes} menit`,
+        },
+      }),
+    findExisting: () =>
+      client.complianceLog.findUnique({
+        where: { scheduleId_scheduledAt: { scheduleId: schedule.id, scheduledAt } },
+      }),
+    constraint: ['scheduleId', 'scheduledAt'],
+  })
+
+  if (!created) {
+    if (log.status !== ComplianceStatus.TUNDA) {
+      throw alreadyProcessed(
+        `Slot ${schedule.id} pada ${scheduledAt.toISOString()} sudah punya jawaban (${log.status})`,
+        { logId: log.id, status: log.status },
+      )
+    }
+
+    // Sudah ditunda: Balas tanpa menambah reminder susulan kedua supaya tidak spam.
+    return {
+      log,
+      scheduledAt,
+      deferredUntil,
+      minutes,
+      reminderJobId: null,
+      escalationRunId: await findActiveEscalationId(client, schedule),
+      alreadyDeferred: true,
+    }
+  }
+
+  let reminderJobId: string | null = null
+  try {
+    reminderJobId = deps.enqueueReminder
+      ? await deps.enqueueReminder({ scheduleId: schedule.id, dueAt: deferredUntil })
+      : null
+  } catch {
+    // Penundaan tetap tercatat walau job susulan gagal diantrekan: slot TUNDA adalah
+    // fakta, dan dispatcher reminder akan tetap mengambil jadwal berikutnya seperti biasa.
+    reminderJobId = null
+  }
+
+  const escalationRunId = await findActiveEscalationId(client, schedule)
+
+  await tryCreateAuditLog(client as any, {
+    action: 'compliance.deferred',
+    actorUserId: input.actorUserId ?? schedule.patientId,
+    actorRole: 'PATIENT',
+    resourceType: 'compliance_log',
+    resourceId: log.id,
+    patientId: schedule.patientId,
+    meta: {
+      scheduleId: schedule.id,
+      channel: input.channel,
+      minutes,
+      scheduledAt: scheduledAt.toISOString(),
+      deferredUntil: deferredUntil.toISOString(),
+      reminderJobId,
+      escalationRunId,
+    },
+  })
+
+  return {
+    log,
+    scheduledAt,
+    deferredUntil,
+    minutes,
+    reminderJobId,
+    escalationRunId,
+    alreadyDeferred: false,
+  }
+}
+
+/** Id run eskalasi aktif milik jadwal ini, tanpa menutupnya. */
+async function findActiveEscalationId(
+  client: CompliancePrismaClient,
+  schedule: { id: string; patientId: string },
+): Promise<string | null> {
+  if (!client.escalationRun) return null
+
+  const activeRun = await client.escalationRun.findFirst({
+    where: {
+      sourceScheduleId: schedule.id,
+      status: { in: ACTIVE_ESCALATION_STATUSES as EscalationRunStatus[] },
+    },
+    orderBy: { startedAt: 'desc' },
+  })
+
+  return activeRun?.id ?? null
 }
 
 /**

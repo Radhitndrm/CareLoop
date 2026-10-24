@@ -17,7 +17,12 @@ import { computeHubSignature } from './webhook.service'
 const APP_SECRET = 'test-app-secret-minimal-32-karakter-abcdefg'
 const VERIFY_TOKEN = 'test-verify-token-abc123'
 const SCHEDULE_ID = '9c2e4d5a-0b17-4c8e-9a3f-1d6b8e2f4c30'
-const NOTIF_CONSTRAINT = 'Notification_providerMessageId_key'
+// Prisma melaporkan `meta.target` sebagai KOLOM yang melanggar, bukan nama index yang
+// dibuat migrasi (`Notification_providerMessageId_key`). Index unik partial itu ada di DB
+// tapi tidak dideklarasikan `@unique` di schema, jadi Prisma tidak pernah menyebut
+// namanya. Mengganti nama index di sini pernah membuat bug: setiap kiriman Meta ganda
+// dibalas 500 dan Meta mengulang tanpa henti.
+const NOTIF_CONSTRAINT = 'providerMessageId'
 
 function metaPayload(buttonReplyId: string, messageId: string): unknown {
   return {

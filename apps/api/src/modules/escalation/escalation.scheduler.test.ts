@@ -207,9 +207,10 @@ describe('reconcileEscalationTimeouts', () => {
   })
 })
 
+/** Isi teks pesan, baik TEXT maupun INTERACTIVE. */
 function textOf(record: RecordedWhatsAppMessage): string {
-  const payload = record.payload as { text?: string }
-  return payload.text ?? JSON.stringify(payload)
+  const payload = record.payload as { text?: string; interactive?: { body: string } }
+  return payload.text ?? payload.interactive?.body ?? JSON.stringify(payload)
 }
 
 describe('WhatsAppEscalationNotifier', () => {
@@ -226,6 +227,7 @@ describe('WhatsAppEscalationNotifier', () => {
       patientPhone: '081298765432',
       tier: 'TIER_1',
       instructions: 'Mohon segera hubungi beliau.',
+      runId: 'aaaaaaaa-1111-4111-8111-111111111111',
     })
 
     expect(result.providerMessageId).toBeTruthy()
@@ -245,6 +247,7 @@ describe('WhatsAppEscalationNotifier', () => {
       patientName: 'Bu Siti Test',
       patientPhone: '081298765432',
       instructions: 'Mohon periksa kondisi pasien.',
+      runId: 'aaaaaaaa-1111-4111-8111-111111111111',
     })
 
     expect(result.providerMessageId).toBeTruthy()
@@ -264,6 +267,7 @@ describe('WhatsAppEscalationNotifier', () => {
       patientName: 'Bu Siti Test',
       tier: 'TIER_1',
       instructions: 'Hubungi beliau.',
+      runId: 'aaaaaaaa-1111-4111-8111-111111111111',
     })
 
     const raw = JSON.stringify(provider.sent)

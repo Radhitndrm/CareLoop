@@ -18,13 +18,17 @@ import {
   ReminderChannel,
   ReminderStatus,
 } from '@careloop/shared'
-import { buildReminderBody } from '../../integrations/whatsapp/templates'
 import {
-  createWhatsAppService,
-  type WhatsAppService,
-} from '../../integrations/whatsapp/whatsapp.service'
+  buildReminderBody,
+  buildReminderTemplate,
+  reminderTemplateButtonPayload,
+} from '../../integrations/whatsapp/templates'
+import { isWindowClosedError } from '../../integrations/whatsapp/errors'
+import { createWhatsAppService, type WhatsAppService } from '../../integrations/whatsapp/whatsapp.service'
 import { getTtsService, TtsError, type TtsService } from '../../integrations/tts'
 import { tryCreateAuditLog } from '../../lib/audit'
+import { getEnv } from '../../lib/env'
+import type { WhatsAppSendResult } from '../../integrations/whatsapp/types'
 import { createJobQueue, type JobQueue, type QueueMode } from '../../lib/queue'
 import { startEscalationRun, type EscalationPrismaClient } from '../escalation/escalation.service'
 
@@ -65,6 +69,10 @@ export type ReminderPrismaClient = Pick<PrismaClient, 'schedule' | 'reminderLog'
 export interface ReminderWorkerDeps {
   prisma: ReminderPrismaClient
   whatsapp: WhatsAppService
+  /** Nama template Meta untuk pengingat proaktif. Default dari env `WHATSAPP_REMINDER_TEMPLATE`. */
+  reminderTemplateName?: string
+  /** Payload quick-reply template. Default dari env `WHATSAPP_REMINDER_TEMPLATE_BUTTON`. */
+  templateButton?: 'KONFIRMS' | 'CONFIRM_TAKEN'
   /** Default `getTtsService()` (stub; TTS sungguhan menyusul di CL-305). */
   tts?: TtsService
   /** Default 1000. Set 0 di test. */
@@ -91,6 +99,22 @@ export interface ReminderScheduleData {
 
 const sleep = (ms: number): Promise<void> =>
   ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve()
+
+function defaultReminderTemplate(): string {
+  try {
+    return getEnv().WHATSAPP_REMINDER_TEMPLATE
+  } catch {
+    return 'pengingat_obat'
+  }
+}
+
+function templateButtonMode(): 'KONFIRMS' | 'CONFIRM_TAKEN' {
+  try {
+    return getEnv().WHATSAPP_REMINDER_TEMPLATE_BUTTON
+  } catch {
+    return 'KONFIRMS'
+  }
+}
 
 export function parseDueAt(value: string | Date): Date {
   const date = typeof value === 'string' ? new Date(value) : value
@@ -204,11 +228,14 @@ async function sendWithRetries(
   logId: string | null
   attempts: number
   error: string | null
+  /** true = terkirim lewat template karena jendela 24 jam tertutup. */
+  usedTemplate?: boolean
 }> {
   const { prisma, logger } = deps
   const now = deps.now ?? (() => new Date())
   const retryDelayMs = deps.retryDelayMs ?? REMINDER_RETRY_DELAY_MS
   const { schedule, scheduledFireAt, body } = context
+  const reminderTemplateName = deps.reminderTemplateName ?? defaultReminderTemplate()
 
   // Provider yang sama, tapi retry internal dimatikan supaya hitungan percobaan
   // sepenuhnya milik worker ini.
@@ -221,7 +248,37 @@ async function sendWithRetries(
   for (let attempt = 1; attempt <= REMINDER_MAX_SEND_ATTEMPTS; attempt++) {
     attempts = attempt
     try {
-      const result = await single.sendInteractive(schedule.patientPhone, body)
+      // Per percobaan, bukan di luar loop: percobaan kedua yang berhasil lewat kanal
+      // interaktif tidak boleh ikut dicatat "dikirim sebagai template" dari percobaan pertama.
+      let usedTemplate = false
+      let result: WhatsAppSendResult
+      try {
+        result = await single.sendInteractive(schedule.patientPhone, body)
+      } catch (error) {
+        // Di luar jendela 24 jam Meta menolak pesan interaktif. Itu kondisi normal untuk
+        // pengingat terjadwal, bukan kegagalan — jadi langsung dicoba ulang sebagai
+        // template (boleh dikirim proaktif). Bila template pun gagal, error aslinya
+        // yang dilaporkan agar angka kegagalan di log tetap jujur.
+        if (!isWindowClosedError(error)) throw error
+
+        result = await single.send({
+          kind: 'TEMPLATE',
+          to: schedule.patientPhone,
+          templateName: reminderTemplateName,
+          parameters: buildReminderTemplate(
+            reminderTemplateName,
+            {
+              medicationName: schedule.medicationName,
+              doseQty: schedule.doseQty,
+              timeOfDay: schedule.timeOfDay,
+              patientName: schedule.patientName,
+            },
+            reminderTemplateButtonPayload(deps.templateButton ?? templateButtonMode(), schedule.id),
+          ),
+        })
+        usedTemplate = true
+      }
+
       const logId = await writeReminderLog(
         prisma,
         {
@@ -232,10 +289,19 @@ async function sendWithRetries(
           status: ReminderStatus.SENT,
           attempt,
           providerMessageId: result.providerMessageId,
+          // Dicatat di `error` supaya jejak audit tidak claiming terkirim via kanal
+          // interaktif padahal sebenarnya lewat template.
+          error: usedTemplate ? 'dikirim sebagai message template (jendela 24 jam tertutup)' : null,
         },
         now,
       )
-      return { providerMessageId: result.providerMessageId, logId, attempts, error: null }
+      return {
+        providerMessageId: result.providerMessageId,
+        logId,
+        attempts,
+        error: null,
+        usedTemplate,
+      }
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error)
       const willRetry = attempt < REMINDER_MAX_SEND_ATTEMPTS

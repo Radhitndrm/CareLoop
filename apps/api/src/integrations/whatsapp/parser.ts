@@ -12,6 +12,15 @@ export const WaButtonIntent = {
 } as const
 export type WaButtonIntent = (typeof WaButtonIntent)[keyof typeof WaButtonIntent]
 
+/**
+ * Payload quick-reply pada message template.
+ *
+ * Payload di dalam template ditetapkan Meta saat template disetujui dan tidak bisa
+ * diubah per pengiriman, jadi ia tidak boleh membawa `scheduleId`. Nilai ini konstan;
+ * CareLoop memetakan balasannya ke jadwal lewat `interactive.context.id`.
+ */
+export const TemplateConfirmButtonId = 'KONFIRMS'
+
 /** URL deep-link buttons (bukan reply) — tidak pernah di-parse sebagai intent. */
 export const Call112ButtonId = 'CALL_112'
 export const MapsButtonId = 'MAPS'

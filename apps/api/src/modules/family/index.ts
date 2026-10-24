@@ -108,6 +108,21 @@ export function registerFamilyRoutes(app: FastifyInstance): void {
     },
   )
 
+  // GET /v1/patients/:id/family-contacts — nakes/admin membaca kontak keluarga
+  // pasien dalam scope-nya. Pasangan dari POST di bawah dan yang dipakai panel
+  // "Kontak Keluarga" di dashboard web.
+  app.get<{ Params: { id: string } }>(
+    '/v1/patients/:id/family-contacts',
+    { preHandler: [authenticate, requireCareTeamRole()] },
+    async (req) => {
+      const claims = getAuthUser(req)
+      await assertPatientInScope(prisma as unknown as PatientsPrismaClient, claims, req.params.id)
+
+      const contacts = await listFamilyContacts(prisma, req.params.id)
+      return { data: contacts }
+    },
+  )
+
   // POST /v1/patients/:id/family-contacts — nakes/admin menambah kontak keluarga
   // pasien dalam scope-nya. Kontak baru berstatus belum verifikasi, sehingga belum
   // menerima alert darurat sampai nomornya dikonfirmasi.

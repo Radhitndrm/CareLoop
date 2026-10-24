@@ -3,8 +3,14 @@
 // Memakai WaInteractiveBody supaya pemanggil cukup service.sendInteractive(to, body).
 // Pesan menghadap pengguna berbahasa Indonesia. PII dibatasi: nama pasien/obat boleh;
 // NIK, tanggal lahir, no. HP, alamat lengkap TIDAK dimasukkan ke template.
-import { WaButtonIntent, buildButtonId, call112Button, mapsButton } from './parser'
-import type { WaButton, WaInteractiveBody } from './types'
+import {
+  TemplateConfirmButtonId,
+  WaButtonIntent,
+  buildButtonId,
+  call112Button,
+  mapsButton,
+} from './parser'
+import type { WaButton, WaInteractiveBody, WaTemplateComponent } from './types'
 
 export interface ReminderTemplateData {
   medicationName: string
@@ -163,4 +169,43 @@ export function buildRoutineRefillTemplate(data: PharmacyTemplateData): string {
     data,
     `Jatah obat Anda akan habis. Kami sudah menyiapkan pengajuan obat ${data.medicationName} untuk pengambilan rutin.`,
   )
+}
+
+// ---------------------------------------------------------------- template Meta (proaktif)
+
+/**
+ * Pengingat obat sebagai message template dengan satu tombol quick-reply.
+ *
+ * Kenapa perlu template: pesan *proaktif* (pengingat terjadwal) berada di luar jendela
+ * layanan 24 jam Meta, sehingga WA menolak pesan interaktif biasa dengan `131047`.
+ * Template yang sudah disetujui Meta boleh dikirim kapan saja — dan tombol quick-reply
+ * di dalamnya tetap membuat pasien bisa "sudah minum" dalam satu ketukan.
+ *
+ * Ketakan tombol itu sampai ke backend sebagai `button_reply` dengan payload yang persis
+ * sama (`CONFIRM_TAKEN_<scheduleId>`), jadi alur dispatch-nya identik dengan mode mock.
+ *
+ * Placeholder di sisi Meta harus urut: {{1}} nama, {{2}} obat, {{3}} waktu.
+ */
+export function buildReminderTemplate(
+  templateName: string,
+  data: ReminderTemplateData & { patientName?: string },
+  buttonPayload: string,
+): WaTemplateComponent[] {
+  return [
+    {
+      type: 'BODY',
+      parameters: [data.patientName ?? 'Pelanggan', data.medicationName, data.timeOfDay],
+    },
+    {
+      type: 'BUTTON',
+      subType: 'quick_reply',
+      index: 0,
+      parameters: [buttonPayload],
+    },
+  ]
+}
+
+/** Payload quick-reply template sesuai `WHATSAPP_REMINDER_TEMPLATE_BUTTON`. */
+export function reminderTemplateButtonPayload(mode: 'KONFIRMS' | 'CONFIRM_TAKEN', scheduleId: string): string {
+  return mode === 'CONFIRM_TAKEN' ? buildButtonId(WaButtonIntent.CONFIRM_TAKEN, scheduleId) : TemplateConfirmButtonId
 }

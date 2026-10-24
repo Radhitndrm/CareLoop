@@ -24,8 +24,8 @@ import { getEnv } from '../../lib/env'
 import { prisma } from '../../lib/prisma'
 import { createJobQueue, registerQueueLifecycle, type JobQueue, type QueueMode } from '../../lib/queue'
 import { nextFireAt } from './next-fire-at'
+import { getReminderJobQueue } from './reminder.queue'
 import {
-  createReminderJobQueue,
   REMINDER_QUEUE_NAME,
   type ReminderJobPayload,
   type ReminderPrismaClient,
@@ -216,12 +216,7 @@ export function createReminderDispatcherQueue(
 
 /** Daftarkan dispatcher + worker reminder ke lifecycle app (queue ditutup saat stop). */
 export function registerReminderScheduler(app: FastifyInstance, mode?: QueueMode): void {
-  const workerDeps: ReminderWorkerDeps = {
-    prisma: prisma as unknown as ReminderPrismaClient,
-    whatsapp: getWhatsAppService(),
-  }
-
-  const reminderQueue = createReminderJobQueue(workerDeps, { mode })
+  const reminderQueue = getReminderJobQueue({ mode })
   const dispatcherQueue = createReminderDispatcherQueue({ mode, reminderQueue })
 
   registerQueueLifecycle(app, [

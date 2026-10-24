@@ -577,10 +577,259 @@ Tidak tersedia untuk role ini
   12. dashboard menampilkan tindak lanjut.
 - [ ] Catat hasil demo dan gap tersisa di issue, bukan dengan menutupi fitur yang belum berjalan.
 
+## Fase I — Persiapan Supabase dan deployment cloud
+
+**Tujuan:** memindahkan database bersama dari PostgreSQL lokal ke Supabase PostgreSQL tanpa merombak service backend, Prisma, RBAC, atau business rule.
+
+### Keputusan arsitektur
+
+Target arsitektur:
+
+```text
+Web Next.js ───────┐
+                   ├── HTTPS ──→ Fastify API ──→ Prisma ──→ Supabase PostgreSQL
+Mobile Expo ──────┘                    │
+                                       ├──→ Redis/BullMQ hosted
+                                       ├──→ WhatsApp provider/mock
+                                       └──→ WebSocket dashboard
+```
+
+Keputusan yang harus dipertahankan:
+
+- Supabase dipakai sebagai managed PostgreSQL, bukan sebagai pengganti Fastify API.
+- Web dan mobile tidak boleh mengakses database secara langsung.
+- `DATABASE_URL` hanya berada di environment backend.
+- Prisma tetap menjadi data access layer.
+- JWT, RBAC, audit, clinical gate, dan state machine tetap berada di backend.
+- Supabase Auth dan Supabase Realtime bukan bagian dari migrasi awal.
+- Tidak menambahkan `@supabase/supabase-js` kecuali ada kebutuhan yang disetujui terpisah.
+
+### I.1 Audit kompatibilitas sebelum membuat project
+
+- [ ] Inventaris semua model, enum, index, constraint, transaction, dan extension Prisma.
+- [ ] Pastikan seluruh migration lokal dapat direplay dari database kosong.
+- [ ] Pastikan schema menggunakan fitur PostgreSQL yang tersedia di Supabase.
+- [ ] Catat query yang sensitif terhadap connection pooling atau prepared statement.
+- [ ] Identifikasi job/worker yang membutuhkan koneksi database jangka panjang.
+- [ ] Identifikasi data sensitif yang tidak boleh muncul di log atau seed.
+- [ ] Pastikan seluruh service backend hanya menggunakan `prisma`/repository, bukan koneksi database langsung.
+
+**Output:** checklist kompatibilitas dan daftar risiko sebelum cutover.
+
+### I.2 Buat environment terpisah
+
+Minimal siapkan tiga target:
+
+```text
+local      → PostgreSQL Docker + Redis Docker
+staging    → Supabase project staging + Redis hosted staging
+production → Supabase project production/demo + Redis hosted production
+```
+
+- [ ] Buat project Supabase staging.
+- [ ] Jika demo akan dipakai terus, buat project production/demo terpisah dari staging.
+- [ ] Gunakan password database yang berbeda untuk setiap environment.
+- [ ] Simpan secret hanya di secret manager/environment deployment.
+- [ ] Jangan menyalin `.env` ke commit, issue, screenshot, atau dokumentasi publik.
+- [ ] Tambahkan tabel dokumentasi nama variable tanpa nilai rahasia.
+
+Variable backend yang wajib:
+
+```env
+NODE_ENV=production
+DATABASE_URL=<supabase-pooled-connection>
+DIRECT_URL=<supabase-direct-connection>
+TEST_DATABASE_URL=<separate-test-database>
+REDIS_URL=<hosted-redis-url>
+JWT_SECRET=<random-secret-at-least-32-characters>
+DATA_ENCRYPTION_KEY=<encryption-key-if-enabled>
+CORS_ORIGINS=<web-allowed-origin>
+```
+
+Aturan koneksi:
+
+- `DATABASE_URL` dipakai runtime API dan menggunakan pooler jika direkomendasikan provider.
+- `DIRECT_URL` dipakai migration/deploy schema melalui koneksi direct.
+- `TEST_DATABASE_URL` tidak boleh sama dengan database staging, demo, atau production karena integration test melakukan destructive cleanup.
+- URL Supabase tidak boleh masuk ke web/mobile bundle.
+
+### I.3 Konfigurasi Prisma dan migration
+
+- [ ] Verifikasi Prisma tetap menggunakan `provider = "postgresql"`.
+- [ ] Verifikasi mekanisme migration menggunakan `DIRECT_URL` untuk koneksi direct.
+- [ ] Jalankan `prisma validate` dan `prisma generate`.
+- [ ] Jalankan migration dari database Supabase yang kosong.
+- [ ] Jalankan `prisma migrate deploy` pada staging.
+- [ ] Periksa tabel, enum, index, foreign key, dan unique constraint di Supabase.
+- [ ] Pastikan migration tidak dijalankan dari endpoint aplikasi saat runtime.
+- [ ] Tetapkan satu orang/CI job sebagai pemilik proses migration.
+
+Urutan staging:
+
+```text
+buat project kosong
+  → set secret backend
+  → prisma migrate deploy
+  → seed sintetis
+  → health check
+  → smoke test API
+```
+
+### I.4 Migrasi/seed data demo dengan aman
+
+- [ ] Jangan menyalin database lokal mentah ke Supabase.
+- [ ] Gunakan migration untuk struktur.
+- [ ] Gunakan seed sintetis untuk data demo.
+- [ ] Pastikan tidak ada NIK, nomor HP, nama, lokasi, atau data pasien riil.
+- [ ] Buat akun demo dengan password baru khusus staging/demo.
+- [ ] Jangan memakai secret atau password production di seed.
+- [ ] Dokumentasikan cara reset staging tanpa menyentuh production.
+- [ ] Verifikasi seed idempoten atau memiliki prosedur reset yang eksplisit.
+
+### I.5 Siapkan Redis/BullMQ hosted
+
+Supabase tidak menggantikan Redis. CareLoop tetap membutuhkan Redis untuk:
+
+- job reminder;
+- timeout eskalasi;
+- retry pengiriman;
+- job emergency;
+- rate limit/dedup jika digunakan;
+- OTP setelah dipindahkan dari memory.
+
+- [ ] Pilih Redis hosted yang mendukung TLS.
+- [ ] Set `REDIS_URL` hanya di backend/worker.
+- [ ] Pisahkan Redis staging dan production/demo.
+- [ ] Verifikasi BullMQ dapat membuat queue dan worker.
+- [ ] Verifikasi retry/backoff dan job idempotency setelah restart worker.
+- [ ] Tambahkan health check Redis tanpa membocorkan URL/credential.
+- [ ] Uji behavior ketika Redis unavailable: error jelas, tidak ada success palsu.
+
+### I.6 Pindahkan OTP dari memory
+
+Saat ini OTP memakai `InMemoryOtpStore`, sehingga tidak cocok untuk restart atau lebih dari satu instance.
+
+- [ ] Buat interface store OTP yang dapat memakai Redis.
+- [ ] Implementasikan Redis OTP store dengan TTL.
+- [ ] Simpan attempt count dan cooldown secara atomik.
+- [ ] Pastikan OTP tidak pernah ditulis ke log.
+- [ ] Pertahankan response anti-enumeration untuk nomor terdaftar/tidak terdaftar.
+- [ ] Tambahkan test expiry, cooldown, max attempts, retry, dan restart.
+- [ ] Sediakan fallback hanya untuk development/mock, bukan production.
+
+### I.7 Deploy Fastify API
+
+- [ ] Pilih platform API yang mendukung Node.js 20+, HTTPS, environment secret, dan WebSocket.
+- [ ] Jalankan `npm run db:deploy` sebagai release/migration step sebelum server.
+- [ ] Jalankan worker reminder/escalation sebagai proses terpisah atau worker yang terkelola.
+- [ ] Set `PORT` dari environment platform.
+- [ ] Set `CORS_ORIGINS` hanya ke origin web yang valid.
+- [ ] Tambahkan endpoint health/readiness:
+  - API process hidup;
+  - database dapat diakses;
+  - Redis dapat diakses;
+  - versi migration diketahui.
+- [ ] Pastikan error response tidak membocorkan stack trace atau connection string.
+- [ ] Pastikan log memiliki request ID, actor/resource ID yang aman, dan tidak mencatat secret/data sensitif.
+- [ ] Pastikan WebSocket dashboard dapat reconnect setelah deployment/restart.
+
+### I.8 Hubungkan web dan mobile ke API publik
+
+- [ ] Set `NEXT_PUBLIC_API_URL` ke HTTPS API staging/demo.
+- [ ] Set `EXPO_PUBLIC_API_URL` ke HTTPS API staging/demo.
+- [ ] Jangan mengisi URL database pada variable `NEXT_PUBLIC_*` atau `EXPO_PUBLIC_*`.
+- [ ] Verifikasi web dapat login dan memanggil endpoint scoped.
+- [ ] Verifikasi mobile dapat login OTP dan menggunakan token untuk seluruh endpoint pasien.
+- [ ] Verifikasi perangkat fisik tidak menggunakan `localhost:4000`.
+- [ ] Verifikasi deep link dan WebSocket memakai base URL environment yang benar.
+- [ ] Pastikan build production tidak membawa URL atau secret staging yang salah.
+
+### I.9 Security dan akses Supabase
+
+- [ ] Simpan database password, JWT secret, WhatsApp secret, dan Redis credential di secret manager.
+- [ ] Gunakan koneksi TLS.
+- [ ] Batasi akses database ke service backend, bukan browser/mobile.
+- [ ] Jangan membuka Supabase database ke publik lebih luas dari kebutuhan provider.
+- [ ] Jangan mengandalkan RLS Supabase sebagai pengganti RBAC backend pada migrasi awal.
+- [ ] Tetap enforce scope puskesmas, role klinis, dan minimisasi farmasi di API.
+- [ ] Aktifkan backup/point-in-time recovery sesuai kebutuhan environment.
+- [ ] Tentukan retention log dan prosedur penghapusan data demo.
+- [ ] Audit siapa yang memiliki akses dashboard Supabase.
+
+### I.10 Observability dan recovery
+
+- [ ] Tambahkan log koneksi gagal yang hanya berisi environment dan error code aman.
+- [ ] Tambahkan metric/health check untuk database, Redis, queue, dan worker.
+- [ ] Uji restart API tanpa kehilangan data.
+- [ ] Uji restart worker tanpa menggandakan reminder/escalation.
+- [ ] Uji database connection pool exhaustion.
+- [ ] Uji job timeout saat worker mati lalu hidup kembali.
+- [ ] Dokumentasikan backup restore ke project staging.
+- [ ] Dokumentasikan rollback aplikasi tanpa melakukan `reset` database production.
+- [ ] Siapkan prosedur cutover kembali ke database lama hanya jika data sudah direkonsiliasi.
+
+### I.11 Verification checklist sebelum go-live
+
+- [ ] `npm run typecheck` lulus.
+- [ ] `npm run lint` lulus.
+- [ ] Unit test lulus.
+- [ ] Integration test memakai `TEST_DATABASE_URL` terpisah.
+- [ ] Migration staging lulus dari database kosong.
+- [ ] Seed staging hanya sintetis.
+- [ ] Login admin/nakes lulus.
+- [ ] OTP pasien lulus dengan store Redis.
+- [ ] Pendaftaran pasien dan scope puskesmas lulus.
+- [ ] Resep draft/approved dan jadwal lulus.
+- [ ] Reminder hanya dikirim untuk pasien `ACTIVE`.
+- [ ] Compliance dan escalation idempoten setelah worker restart.
+- [ ] Emergency alert dan WebSocket lulus.
+- [ ] Farmasi tidak dapat mengakses data yang tidak diperlukan.
+- [ ] Web dan mobile memakai HTTPS API publik.
+- [ ] Tidak ada secret di git diff atau bundle frontend.
+- [ ] Tidak ada auto-dial 112.
+
+### I.12 Urutan cutover
+
+```text
+1. Freeze perubahan schema dan buat backup sumber
+2. Buat Supabase staging
+3. Deploy migration
+4. Seed data sintetis
+5. Deploy API + worker staging
+6. Hubungkan web/mobile staging
+7. Jalankan smoke test dan demo journey
+8. Perbaiki temuan tanpa menyentuh production
+9. Buat Supabase production/demo terpisah
+10. Deploy migration production
+11. Seed hanya jika environment demo
+12. Deploy API/worker production
+13. Update URL web/mobile
+14. Pantau health check, queue, log, dan alert
+```
+
+### I.13 Scope yang sengaja tidak dikerjakan pada migrasi awal
+
+- [ ] Jangan migrasikan auth custom ke Supabase Auth pada fase yang sama.
+- [ ] Jangan mengganti Prisma service dengan Supabase SDK.
+- [ ] Jangan mengganti WebSocket dengan Supabase Realtime.
+- [ ] Jangan memindahkan file ke Supabase Storage sebelum ada kebutuhan upload yang nyata.
+- [ ] Jangan menggabungkan database test dengan database demo/production.
+
+**Definition of done Fase I:**
+
+- API staging berhasil membaca dan menulis data di Supabase melalui Prisma;
+- web dan mobile hanya berkomunikasi dengan API publik;
+- migration dan seed sintetis dapat diulang pada environment baru;
+- worker Redis/BullMQ berjalan dan restart-safe;
+- OTP tidak lagi bergantung pada memory untuk environment cloud;
+- smoke test seluruh flow kritis lulus;
+- tidak ada secret di repository atau bundle frontend;
+- ada dokumentasi deployment, backup, recovery, dan rollback.
+
 ## Urutan implementasi yang direkomendasikan
 
 ```text
-Fase A → Fase B → Fase C → Fase D → Fase E → Fase F → Fase G → Fase H
+Fase A → Fase B → Fase C → Fase D → Fase E → Fase F → Fase G → Fase H → Fase I
 ```
 
-Fase A–E adalah jalur kritis. Jangan menghabiskan waktu pada edukasi, export, atau polish visual sebelum onboarding sampai aktivasi pasien dapat dijalankan tanpa seed/manual UUID.
+Fase A–E adalah jalur kritis produk. Fase I dapat dimulai setelah kontrak database dan flow inti stabil, tetapi sebelum demo online atau deployment multi-instance. Jangan menghabiskan waktu pada edukasi, export, atau polish visual sebelum onboarding sampai aktivasi pasien dapat dijalankan tanpa seed/manual UUID.

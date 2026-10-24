@@ -1,12 +1,19 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { UserRole, complianceConfirmSchema, complianceListQuerySchema } from '@careloop/shared'
+import {
+  UserRole,
+  complianceConfirmSchema,
+  complianceDeferSchema,
+  complianceListQuerySchema,
+} from '@careloop/shared'
 import { prisma } from '../../lib/prisma'
 import { authenticate, getAuthUser, requireCareTeamRole, requireRole } from '../../lib/auth'
 import { notFound } from '../../lib/errors'
+import { getReminderJobQueue } from '../reminders/reminder.queue'
 import { assertPatientInScope, type PatientsPrismaClient } from '../patients/patients.service'
 import {
   assertScheduleOwner,
   confirmMedicationIntake,
+  deferMedicationIntake,
   listPatientCompliance,
   type CompliancePrismaClient,
 } from './compliance.service'
@@ -15,6 +22,7 @@ export {
   assertScheduleOwner,
   classifyConfirmation,
   confirmMedicationIntake,
+  deferMedicationIntake,
   isBeyondLatenessLimit,
   listPatientCompliance,
   resolveConfirmSlot,
@@ -28,6 +36,9 @@ export type {
   ConfirmIntakeResult,
   ConfirmSchedule,
   ConfirmSlot,
+  DeferExecutionDeps,
+  DeferIntakeInput,
+  DeferIntakeResult,
 } from './compliance.service'
 
 /**
@@ -86,6 +97,57 @@ export function registerComplianceRoutes(app: FastifyInstance): void {
           status: result.status,
           confirmedAt: result.log.confirmedAt.toISOString(),
           escalationCancelled: result.escalationResolved,
+          escalationRunId: result.escalationRunId,
+        },
+      })
+    },
+  )
+
+  // POST /v1/compliance/defer — "Belum siap / tunda 15 menit" (FR-2.4 / AC-2.4).
+  // Slot dicatat TUNDA dan pengingat dijadwalkan ulang; run eskalasi dibiarkan terbuka
+  // karena menunda bukan berarti sudah minum.
+  app.post(
+    '/v1/compliance/defer',
+    { preHandler: [authenticate, requireRole(UserRole.PATIENT)] },
+    async (req, reply) => {
+      const input = complianceDeferSchema.parse(req.body ?? {})
+      const owner = await readScheduleOwner(req, input.scheduleId)
+
+      assertScheduleOwner({
+        claimsRole: owner.claimsRole,
+        claimsSub: owner.claimsSub,
+        patientId: owner.patientId,
+      })
+
+      const result = await deferMedicationIntake(
+        prisma as unknown as CompliancePrismaClient,
+        {
+          scheduleId: input.scheduleId,
+          channel: 'WHATSAPP',
+          minutes: input.minutes,
+          actorUserId: owner.claimsSub,
+        },
+        {
+          enqueueReminder: async ({ scheduleId, dueAt }) => {
+            const queue = getReminderJobQueue()
+            return queue.schedule(
+              { scheduleId, dueAt: dueAt.toISOString() },
+              Math.max(0, dueAt.getTime() - Date.now()),
+              { jobId: `reminder-${scheduleId}-defer-${dueAt.getTime()}` },
+            )
+          },
+        },
+      )
+
+      return reply.code(200).send({
+        data: {
+          logId: result.log.id,
+          scheduleId: input.scheduleId,
+          scheduledAt: result.scheduledAt.toISOString(),
+          status: result.log.status,
+          deferredUntil: result.deferredUntil.toISOString(),
+          minutes: result.minutes,
+          alreadyDeferred: result.alreadyDeferred,
           escalationRunId: result.escalationRunId,
         },
       })

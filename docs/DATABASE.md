@@ -297,13 +297,18 @@ Catatan kepatuhan (append-only).
 | medication_id | uuid FK | |
 | scheduled_at | timestamptz | Waktu jadwal (UTC) |
 | confirmed_at | timestamptz nullable | Waktu konfirmasi |
-| status | enum `CONFIRMED` `CONFIRMED_LATE` `MISSED` `TUNDA` `PENDING` | |
+| status | enum `CONFIRMED` `CONFIRMED_LATE` `MISSED` `TUNDA` `PENDING` | `TUNDA` = pasien menekan "Tunda N menit" (FR-2.4) |
 | channel | enum `WHATSAPP` `IN_APP` `VOICE` | Subset `Channel`; konfirmasi dari app = `IN_APP` |
 | source_message_id | varchar(128) nullable | Dedup WhatsApp |
 | notes | text nullable | |
 | created_at | timestamptz | |
 
 **Derivasi adherence**: `CONFIRMED + CONFIRMED_LATE` ÷ total schedule dalam periode (lihat FR-5).
+
+**Siklus hidup `TUNDA`.** Satu slot punya paling banyak satu baris (unik `schedule_id + scheduled_at`).
+Pasien yang menunda lalu berubah pikiran mengonfirmasi, baris `TUNDA` yang sama **di-update** menjadi
+`CONFIRMED`/`CONFIRMED_LATE` — bukan baris baru dan bukan penolakan `409`. Karena itu `TUNDA` tidak
+perlu penyesuaian khusus saat menghitung adherence: ia dihitung "sudah diminum lalu diproses ulang".
 
 ### 3.9 `vital_signs`
 Data vital dari smartwatch/mock.

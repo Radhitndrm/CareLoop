@@ -29,6 +29,14 @@ describe('Escalation Routes (CL-207, docs/API.md §3.6)', () => {
     }
     if (prisma.familyContact) {
       vi.spyOn(prisma.familyContact, 'findMany').mockResolvedValue([])
+      // Route respond memverifikasi bahwa pengirim benar-benar kontak keluarga
+      // pasien tersebut, bukan sekadar punya role FAMILY.
+      vi.spyOn(prisma.familyContact, 'findFirst').mockResolvedValue({
+        id: 'contact-family-1',
+        patientId: dummyPatientId,
+        userId: '33333333-3333-4333-8333-333333333333',
+        isActive: true,
+      } as any)
     }
     if (prisma.nakesContact) {
       vi.spyOn(prisma.nakesContact, 'findMany').mockResolvedValue([])

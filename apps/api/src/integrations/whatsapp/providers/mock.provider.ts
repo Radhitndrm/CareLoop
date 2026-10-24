@@ -2,6 +2,7 @@
 // Tidak pernah mengirim ke nomor riil: hanya mencatat payload ke memori (dry-run).
 // Dipakai sebagai default service dan sebagai recordable fake di unit test.
 import { WhatsAppSendError } from '../errors'
+import { getWhatsAppSandbox } from '../sandbox'
 import type {
   OutboundWhatsAppMessage,
   WaRecipient,
@@ -43,10 +44,12 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
   async send(message: OutboundWhatsAppMessage): Promise<WhatsAppSendResult> {
     if (this.failRemaining > 0) {
       this.failRemaining -= 1
-      throw new WhatsAppSendError('Simulasi kegagalan pengiriman (mock dry-run)', {
+      const error = new WhatsAppSendError('Simulasi kegagalan pengiriman (mock dry-run)', {
         provider: this.name,
         retryable: true,
       })
+      getWhatsAppSandbox().recordFailedOutbound(message, error.message)
+      throw error
     }
 
     const record: RecordedWhatsAppMessage = {
@@ -56,6 +59,10 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
       sentAt: new Date(),
     }
     this.records.push(record)
+    getWhatsAppSandbox().recordOutbound(message, {
+      providerMessageId: record.id,
+      sentAt: record.sentAt,
+    })
     return { providerMessageId: record.id, sentAt: record.sentAt }
   }
 }

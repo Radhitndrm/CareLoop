@@ -191,10 +191,10 @@ describe('emergency.service (CL-204 & CL-206)', () => {
       const mockPrisma = createMockEmergencyPrisma()
       const mockQueue = new InMemoryEscalationQueueAdapter()
       const mockWa = {
-        sendText: vi.fn().mockResolvedValue({ providerMessageId: 'wa-msg-123' }),
+        sendText: vi.fn(),
         send: vi.fn(),
         sendTemplate: vi.fn(),
-        sendInteractive: vi.fn(),
+        sendInteractive: vi.fn().mockResolvedValue({ providerMessageId: 'wa-msg-123' }),
         sendAudio: vi.fn(),
         provider: {} as any,
       }
@@ -238,10 +238,17 @@ describe('emergency.service (CL-204 & CL-206)', () => {
       )
       expect(result.escalationRun.id).toBe(dummyRunId)
 
-      // 3. Verifikasi pesan konfirmasi WA terkirim ke pasien
-      expect(mockWa.sendText).toHaveBeenCalledWith(
+      // 3. Verifikasi pesan konfirmasi WA terkirim ke pasien sebagai pesan INTERAKTIF:
+      // "Apakah Anda aman?" harus bisa dijawab satu ketukan (AC-4.2), bukan teks bebas.
+      expect(mockWa.sendInteractive).toHaveBeenCalledWith(
         '081234567890',
-        expect.stringContaining("balas 'AMAN'"),
+        expect.objectContaining({
+          body: expect.stringContaining("balas 'AMAN'"),
+          buttons: expect.arrayContaining([
+            expect.objectContaining({ id: `SAFE_${dummyEmergencyId}` }),
+            expect.objectContaining({ id: `NEED_HELP_${dummyEmergencyId}` }),
+          ]),
+        }),
       )
       expect(result.waMessageId).toBe('wa-msg-123')
 

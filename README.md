@@ -194,6 +194,9 @@ cd apps/api && npm run db:seed   # pasien, keluarga, nakes, jadwal obat contoh
 | [docs/UI_UX.md](docs/UI_UX.md) | User flow, wireframe, prinsip desain lansia |
 | [docs/SECURITY.md](docs/SECURITY.md) | Keamanan (UU PDP), auth, enkripsi, audit |
 | [docs/TESTING.md](docs/TESTING.md) | Strategi testing MVP & integrasi pihak ketiga |
+| [docs/WHATSAPP-SETUP.md](docs/WHATSAPP-SETUP.md) | Mengaktifkan integrasi WhatsApp Cloud API (jendela 24 jam, template, token) |
+| [docs/META-ACCOUNT-SETUP.md](docs/META-ACCOUNT-SETUP.md) | Panduan mendaftar akun Meta & verifikasi nomor, langkah demi langkah |
+| [docs/RUNBOOK-DEMO.md](docs/RUNBOOK-DEMO.md) | Runbook menjalankan demo WhatsApp Simulator saat presentasi |
 
 ## Tim / Kontributor
 

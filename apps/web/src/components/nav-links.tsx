@@ -9,6 +9,7 @@ import {
   Building2Icon,
   ClipboardListIcon,
   LayoutDashboardIcon,
+  MessageCircleIcon,
   PillIcon,
   UsersIcon,
 } from 'lucide-react'
@@ -22,6 +23,7 @@ const ICONS = {
   emergency: BellRingIcon,
   nakes: ActivityIcon,
   clinics: Building2Icon,
+  simulator: MessageCircleIcon,
 } as const
 
 export type NavIcon = keyof typeof ICONS
