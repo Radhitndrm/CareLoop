@@ -11,6 +11,8 @@ Checklist tugas per **fase** pembuatan aplikasi, mengikuti roadmap Minggu 1–4 
 | [fase-3-sdg-dan-polish.md](fase-3-sdg-dan-polish.md) | Fase 3 — Fitur SDG & Polish UX (Minggu 3) | Fitur 6, 8, 9, 10, 11, 12, 13 | ▢ |
 | [fase-4-hardening-demo.md](fase-4-hardening-demo.md) | Fase 4 — Hardening, Keamanan & Demo (Minggu 4) | Hardening, testing kritis, demo data, pitch | ▢ |
 | [plan-operasional-puskesmas.md](plan-operasional-puskesmas.md) | Plan baru — Operasional Puskesmas & Onboarding End-to-End | Setup puskesmas, staf, onboarding pasien, aktivasi klinis, flow mobile, work queue | ▢ |
+| [plan-supabase-deployment.md](plan-supabase-deployment.md) | Plan — Persiapan Supabase & Deployment Cloud | Supabase PostgreSQL, Prisma migration, Redis hosted, API publik, security, recovery | ▢ |
+| [plan-whatsapp-mockup-demo.md](plan-whatsapp-mockup-demo.md) | Plan — WhatsApp Mockup untuk Presentasi | Simulator pesan, reply intent, reminder, eskalasi, emergency, fixture demo | ▢ |
 
 ## Cara Pakai
 

@@ -93,19 +93,29 @@ describe('parseEnv — env invalid ditolak dengan pesan jelas', () => {
     expect(issuesOf({ NODE_ENV: 'production' })[0]?.key).toBe('CORS_ORIGINS')
   })
 
-  it('production wajib menyertakan REDIS_URL dan DIRECT_URL', () => {
+  it('production wajib menyertakan REDIS_URL, DIRECT_URL, dan SIMULATOR_ENABLED=false', () => {
     const keys = issuesOf({ NODE_ENV: 'production', CORS_ORIGINS: 'https://careloop.dev' }).map(
       (i) => i.key,
     )
-    expect(keys).toEqual(expect.arrayContaining(['REDIS_URL', 'DIRECT_URL']))
+    expect(keys).toEqual(
+      expect.arrayContaining(['REDIS_URL', 'DIRECT_URL', 'SIMULATOR_ENABLED']),
+    )
 
     const env = parse({
       NODE_ENV: 'production',
       CORS_ORIGINS: 'https://careloop.dev',
       REDIS_URL: 'rediss://cache.example:6379',
       DIRECT_URL: VALID.DATABASE_URL,
+      SIMULATOR_ENABLED: 'false',
     })
     expect(env.REDIS_URL).toBe('rediss://cache.example:6379')
+    expect(env.SIMULATOR_ENABLED).toBe(false)
+  })
+
+  it('SIMULATOR_ENABLED default nyala di development/test', () => {
+    expect(parse({ NODE_ENV: 'development' }).SIMULATOR_ENABLED).toBe(true)
+    expect(parse({ NODE_ENV: 'test' }).SIMULATOR_ENABLED).toBe(true)
+    expect(parse({ NODE_ENV: 'development', SIMULATOR_ENABLED: 'false' }).SIMULATOR_ENABLED).toBe(false)
   })
 
   it('REDIS_URL kosong di development tetap boleh (demo in-process)', () => {

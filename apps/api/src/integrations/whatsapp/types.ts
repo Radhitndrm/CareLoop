@@ -36,10 +36,21 @@ export const waInteractiveBodySchema = z.object({
 })
 export type WaInteractiveBody = z.infer<typeof waInteractiveBodySchema>
 
-/** Komponen template — parameter teks tersubstitusi ke placeholder {{1}}, {{2}}, dst. */
+/**
+ * Komponen template — parameter teks tersubstitusi ke placeholder {{1}}, {{2}}, dst.
+ *
+ * `type: 'BUTTON'` ditambahkan untuk tombol quick-reply. Ini yang membuat pengingat
+ * terjadwal tetap bisa "satu ketukan" walau dikirim lewat template: Meta membatasi
+ * template utility maksimal satu tombol quick_reply, dan tombol itulah yang membuat
+ * balasan pasien sampai sebagai `button_reply` lalu ikut-flow ke dispatcher yang sama.
+ */
 export const waTemplateComponentSchema = z.object({
-  type: z.enum(['HEADER', 'BODY', 'FOOTER']),
+  type: z.enum(['HEADER', 'BODY', 'FOOTER', 'BUTTON']),
   parameters: z.array(z.string().min(1)).max(4),
+  /** Wajib untuk `BUTTON`. */
+  subType: z.enum(['quick_reply', 'url']).optional(),
+  /** Posisi tombol pada template (0-based). Wajib untuk `BUTTON`. */
+  index: z.number().int().min(0).max(9).optional(),
 })
 export type WaTemplateComponent = z.infer<typeof waTemplateComponentSchema>
 

@@ -3,7 +3,8 @@ import { z } from 'zod'
 import { UserRole } from '@careloop/shared'
 import { prisma } from '../../lib/prisma'
 import { notFound } from '../../lib/errors'
-import { authenticate, requireCareTeamRole, requireRole } from '../../lib/auth'
+import { authenticate, getAuthUser, requireCareTeamRole, requireRole } from '../../lib/auth'
+import { resolveNakesScope } from '../dashboard/dashboard.service'
 import { emergencyPatientResponseSchema } from '@careloop/shared'
 import {
   createEmergencyFromAnomaly,
@@ -64,12 +65,19 @@ export function registerEmergencyRoutes(app: FastifyInstance): void {
   app.get(
     '/v1/emergencies/active',
     { preHandler: [authenticate, requireCareTeamRole()] },
-    async (_req, reply) => {
+    async (req, reply) => {
+      // Filter scope WAJIB: respons endpoint ini memuat lokasi GNSS, detak jantung,
+      // dan nomor HP keluarga. Tanpa filter, seluruh darah nakes bisa membocorkan data
+      // darurat pasien puskesmas lain.
+      const claims = getAuthUser(req)
+      const scope = await resolveNakesScope(prisma as any, claims)
+
       const activeEmergencies = await prisma.emergencyAlert.findMany({
         where: {
           status: {
             in: ['PENDING_PATIENT_CONFIRM', 'ESCALATING'],
           },
+          ...(scope.isAdmin ? {} : { patient: scope.patientFilter }),
         },
         include: {
           patient: {

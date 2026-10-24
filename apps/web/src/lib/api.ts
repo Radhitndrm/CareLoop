@@ -1095,3 +1095,126 @@ export async function getDispensingRecords(params?: {
   })
   return fetchWithAuth<DispensingRecord[]>(`/v1/dispensing-records${query}`)
 }
+
+// ------------------------------------------------------- WhatsApp Simulator (demo)
+// Hanya aktif saat backend berjalan dengan SIMULATOR_ENABLED=true (backend menolak
+// dengan 404 di production). Reply tetap diproses service bisnis yang sama dengan
+// webhook produksi — panel ini hanya menampilkan & memicu.
+
+export type SimulatorStatus = 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'
+export type SimulatorRecipientKind = 'PATIENT' | 'FAMILY' | 'NAKES' | 'UNKNOWN'
+
+export interface SimulatorRecipient {
+  phone: string
+  displayPhone: string
+  kind: SimulatorRecipientKind
+  label: string
+  patientId: string | null
+}
+
+export interface SimulatorButton {
+  id: string
+  title: string
+  type: 'REPLY' | 'URL'
+  actionable: boolean
+  disabledReason: string | null
+}
+
+export interface SimulatorMessage {
+  messageId: string
+  providerMessageId: string | null
+  to: string
+  from: string | null
+  direction: 'OUTBOUND' | 'INBOUND'
+  kind: string
+  body: string
+  buttons: SimulatorButton[]
+  status: SimulatorStatus
+  statusLabel: string
+  createdAt: string
+  actionable: boolean
+  answeredAt: string | null
+  error: string | null
+  relatedResource: { type: string; id: string; intent: string } | null
+}
+
+export interface SimulatorThread {
+  recipient: SimulatorRecipient
+  messageCount: number
+  lastMessageAt: string
+  hasUnanswered: boolean
+}
+
+export type SimulatorScenario =
+  | 'REMINDER_CONFIRMED'
+  | 'REMINDER_NO_RESPONSE'
+  | 'HEART_RATE_ANOMALY'
+  | 'PROVIDER_FAILURE'
+
+export interface SimulatorInfo {
+  enabled: boolean
+  providerMode: 'mock' | 'live'
+  nodeEnv: string
+  scenarios: SimulatorScenario[]
+  defaults: { scheduleId: string; patientId: string }
+  providerFailureSimulated: boolean
+}
+
+export interface SimulatorScenarioOutcome {
+  scenario: SimulatorScenario
+  step: string
+  summary: Record<string, unknown>
+  focus: { type: string; id: string } | null
+}
+
+export interface SimulatorMessagesResponse {
+  messages: SimulatorMessage[]
+  recipient: SimulatorRecipient | null
+}
+
+export async function getSimulatorInfo(): Promise<SimulatorInfo> {
+  return fetchWithAuth<SimulatorInfo>('/v1/dev/whatsapp/status')
+}
+
+export async function getSimulatorThreads(): Promise<SimulatorThread[]> {
+  return fetchWithAuth<SimulatorThread[]>('/v1/dev/whatsapp/threads')
+}
+
+export async function getSimulatorMessages(to?: string): Promise<SimulatorMessagesResponse> {
+  const query = buildQueryString({ to })
+  const { data, meta } = await fetchWithMeta<SimulatorMessage[], { recipient: SimulatorRecipient | null }>(
+    `/v1/dev/whatsapp/messages${query}`,
+  )
+  return { messages: data, recipient: meta?.recipient ?? null }
+}
+
+export async function replySimulatorMessage(
+  messageId: string,
+  buttonId: string,
+): Promise<{ inboundMessageId: string; intent: string; outcome: string; details: Record<string, unknown> }> {
+  return fetchWithAuth(`/v1/dev/whatsapp/messages/${messageId}/reply`, {
+    method: 'POST',
+    body: JSON.stringify({ buttonId }),
+  })
+}
+
+export async function triggerSimulatorScenario(
+  scenario: SimulatorScenario,
+  payload?: { scheduleId?: string; patientId?: string },
+): Promise<SimulatorScenarioOutcome> {
+  return fetchWithAuth<SimulatorScenarioOutcome>(
+    `/v1/dev/whatsapp/scenarios/${scenario}/trigger`,
+    { method: 'POST', body: JSON.stringify(payload ?? {}) },
+  )
+}
+
+export async function resetSimulator(): Promise<{ messagesCleared: number; dbDeleted: Record<string, number> }> {
+  return fetchWithAuth('/v1/dev/whatsapp/scenarios/reset', { method: 'POST' })
+}
+
+export async function setSimulatorProviderFailure(enabled: boolean): Promise<{ enabled: boolean }> {
+  return fetchWithAuth('/v1/dev/whatsapp/provider-failure', {
+    method: 'POST',
+    body: JSON.stringify({ enabled }),
+  })
+}

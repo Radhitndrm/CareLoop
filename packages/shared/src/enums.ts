@@ -443,5 +443,8 @@ export const AuditAction = {
   ESCALATION_HANDLED: 'escalation.handled',
   EXPORT_JOB_CREATED: 'export.job.created',
   EXPORT_DOWNLOADED: 'export.downloaded',
+  SIMULATOR_TRIGGERED: 'simulator.trigger',
+  SIMULATOR_REPLIED: 'simulator.reply',
+  SIMULATOR_RESET: 'simulator.reset',
 } as const
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction]

@@ -461,6 +461,18 @@ Jadwal yang dibuat pada obat yang **sudah** `APPROVED` langsung aktif — keputu
 
 **GET /v1/patients/:id/compliance** adalah sisi nakes dari endpoint di atas: setiap kali pasien menekan "sudah minum" lewat WhatsApp maupun tombol di aplikasi, hasilnya tampil di sini sebagai `CONFIRMED` / `CONFIRMED_LATE`, sehingga perawat dan dokter bisa melihat kepatuhan per pasien tanpa menghitung ulang dari agregat dashboard.
 
+**POST /v1/compliance/defer** — "Belum siap / tunda N menit" (FR-2.4 / AC-2.4).
+Body: `{ "scheduleId": uuid, "minutes": 15 }` — `minutes` opsional (5–120, default `COMPLIANCE_DEFER_MINUTES`).
+
+Effek:
+- slot jatuh tempo terakhir dicatat di `compliance_logs` dengan status **`TUNDA`** (bukan `PENDING`), supaya angka adherence tidak menghitungnya sebagai "belum dijawab";
+- reminder susulan dijadwalkan ulang pada `now + minutes`;
+- **run eskalasi dibiarkan terbuka** — menunda bukan berarti minum, jadi alarm tetap berbunyi bila pasien akhirnya tidak minum (FR-3.1).
+
+Bila slot yang sama lalu dikonfirmasi ("berubah pikiran"), baris `TUNDA` yang sama **dinaikkan** menjadi `CONFIRMED`/`CONFIRMED_LATE` — bukan ditolak `409`. Tanpa itu "Tunda" menjadi jebakan, karena konfirmasi berikutnya selalu gagal.
+
+Response 200: `{ logId, scheduleId, scheduledAt, status, deferredUntil, minutes, alreadyDeferred, escalationRunId }`
+
 Query: `from`, `to` (ISO date), `status`, `limit` (default 50, maks 200), `offset`.
 
 **Response 200:**
@@ -1387,6 +1399,7 @@ eksplisit di bawah. Termasuk yang semula terbuka dan kini ditutup:
 | `GET /v1/escalations/*` | care team | NIK, `livingSituation`, nomor HP keluarga |
 | `POST /v1/vitals` | care team | Menulis vital yang memicu alert darurat |
 | `POST /internal/jobs/*` | nakes, admin | Memicu transisi eskalasi |
+| `/v1/dev/whatsapp/*` | care team (tanpa FARMASI) | Membaca & memicu percakapan WhatsApp mock |
 
 Pengecualian yang tetap terbuka: `POST /v1/auth/*` (login/OTP/aktivasi staf) dan
 `POST /v1/webhooks/whatsapp` (verifikasi signature provider).
@@ -1573,11 +1586,37 @@ Public endpoint yang dipanggil Meta/Twilio. Verifikasi signature:
 
 **Aturan handler:**
 1. Verifikasi signature (HMAC) — jika gagal `401`.
-2. Cek duplikat `message.id` (sudah di `compliance_logs.source_message_id`) → `200 OK` tanpa proses.
+2. Cek duplikat `message.id` (dedup lewat unik `notifications.providerMessageId`) → `200 OK` tanpa proses.
 3. Parsing `button_reply.id` → intent + resource id (format di [§6.1](#61-format-button_replyid)).
-4. Eksekusi service terkait (compliance confirm / emergency response / escalation respond).
-5. Selalu balas `200 OK` (Meta butuh cepat; pemrosesan async + status 200).
-6. Message masuk non-interactive (teks biasa) → route ke chatbot edukasi (§3.10) atau fallback.
+4. Teruskan ke `dispatchWaIntent` (`modules/wa-intents`) — satu-satunya tempat intent
+   dipetakan ke domain service.
+5. Selalu balas `200 OK`. Kegagalan domain (409/403/422) dikembalikan di `data.dispatchError`,
+   bukan dilempar jadi 5xx: payload yang sama pasti ditolak lagi, dan 5xx hanya membuat
+   Meta mengirim ulang tanpa gunanya.
+6. Message masuk non-interactive (teks biasa) → route ke chatbot edukasi (§3.11) atau fallback.
+
+**Response 200:**
+```json
+{
+  "data": {
+    "processed": true,
+    "intent": "CONFIRM_TAKEN",
+    "resourceId": "9c2e4d5a-…",
+    "dispatch": {
+      "outcome": "CONFIRMED",
+      "resourceType": "schedule",
+      "resourceId": "9c2e4d5a-…",
+      "details": { "logId": "…", "escalationRunId": "…", "escalationResolved": true }
+    },
+    "dispatchError": null
+  }
+}
+```
+
+**Ownership.** Dispatcher menolak reply yang pengirimnya bukan pemilik resource (`403`).
+Untuk `CONFIRM_TAKEN`/`DEFER`/`SAFE`/`NEED_HELP` nomornya harus sama dengan nomor pasien pada
+jadwal/darurat tersebut; untuk `HANDLE` pengirim harus user, kontak keluarga, atau kontak nakes
+pasien yang punya run tersebut. Nomor yang tidak dikenal tidak pernah bisa menutup alarm.
 
 ### 6.1 Format `button_reply.id`
 
@@ -1602,6 +1641,42 @@ Tombol URL (bukan reply, tidak di-parse sebagai intent):
 
 Template & komposisi pesan ada di `apps/api/src/integrations/whatsapp/templates.ts`. Pesan menghadap
 pengguna dalam Bahasa Indonesia dan hanya memuat PII minimal (nama pasien/obat boleh; NIK/tanggal lahir tidak pernah).
+
+---
+
+## 6.2 WhatsApp Simulator (demo presentasi)
+
+Endpoint `/v1/dev/whatsapp/*` menjalankan simulasi WhatsApp **tanpa Meta Cloud API dan tanpa
+nomor riil**. Hanya berlaku pada dua mode: `PROVIDER_MODE=mock` + `SIMULATOR_ENABLED=true`.
+
+Guard berlapis (semuanya wajib):
+1. `SIMULATOR_ENABLED` — `env.ts` menolak startup production yang menyalakannya, dan route
+   membalas `404` (bukan `403`) saat env dimatikan, supaya route tidak bisa dipetakan.
+2. `authenticate` — tidak ada endpoint dev yang terbuka.
+3. `requireCareTeamRole` — **apotek (`FARMASI`) dikecualikan**: panel menampilkan nomor HP dan
+   isi pesan pasien, sedangkan apotek hanya berhak menyentuh antrean obat (§3.18.1).
+
+| Method | Path | Deskripsi |
+|---|---|---|
+| GET | `/v1/dev/whatsapp/status` | Status simulator, provider mode, scenario tersedia |
+| GET | `/v1/dev/whatsapp/threads` | Daftar percakapan per penerima + label sintetis |
+| GET | `/v1/dev/whatsapp/messages?to=<waId>` | Isi percakapan (`meta.recipient` = label penerima) |
+| POST | `/v1/dev/whatsapp/messages/:messageId/reply` | Tekan tombol: `{ "buttonId": "CONFIRM_TAKEN_<scheduleId>" }` |
+| POST | `/v1/dev/whatsapp/scenarios/:scenario/trigger` | Jalankan scenario demo |
+| POST | `/v1/dev/whatsapp/scenarios/reset` | Reset fixture demo (hanya namespace demo) |
+| POST | `/v1/dev/whatsapp/provider-failure` | Sakelar kegagalan mock: `{ "enabled": true }` |
+
+**Scenario:** `REMINDER_CONFIRMED`, `REMINDER_NO_RESPONSE`, `HEART_RATE_ANOMALY`, `PROVIDER_FAILURE`.
+
+Balasan tombol tidak pernah mengubah tabel domain secara langsung. `messageId` +
+`buttonId` diteruskan ke `dispatchWaIntent` yang sama dengan webhook produksi, jadi
+idempotensi dan cek ownership berlaku sama. Tombol yang sudah dibalas, tombol milik pesan
+lain, atau tombol yang bukan `REPLY` semuanya ditolak `404`.
+
+Reset menghapus percakapan mock dan baris milik **dua persona demo saja**
+(`DEMO_IDS.userBuRatna`, `DEMO_IDS.userPakHaji`) di `compliance_logs`, `reminder_logs`,
+`escalation_runs`/`escalation_steps`, `emergency_alerts`, dan `notifications` mock. Akun,
+resep, jadwal, dan data non-demo tidak disentuh.
 
 ---
 

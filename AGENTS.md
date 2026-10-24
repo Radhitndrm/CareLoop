@@ -202,6 +202,7 @@ Sumber tunggal untuk api: `apps/api/src/lib/env.ts` (validasi zod, gagal = start
 | `OTP_MAX_ATTEMPTS` | api | `5` | Maksimal percobaan verifikasi per kode |
 | `OTP_MOCK_CODE` | api | `123456` | Kode tetap saat `PROVIDER_MODE=mock` |
 | `PROVIDER_MODE` | api | `mock` | `mock`/`live`; `live` mewajibkan kredensial WhatsApp |
+| `SIMULATOR_ENABLED` | api | `true` (dev/test) | WhatsApp Simulator + `/v1/dev/whatsapp/*`. **Wajib `false` di production** |
 | `WHATSAPP_TOKEN` | api | — | Token WhatsApp Business API |
 | `WHATSAPP_PHONE_ID` | api | — | Nomor bisnis WA |
 | `WA_WEBHOOK_VERIFY_TOKEN` | api | — | Verifikasi webhook WhatsApp |

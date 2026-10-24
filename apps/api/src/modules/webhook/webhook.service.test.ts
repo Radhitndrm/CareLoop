@@ -123,7 +123,18 @@ describe('CL-103 — Webhook WhatsApp Hub', () => {
         id: MESSAGE_ID,
         from: '6281234567890',
         replyId: `CONFIRM_TAKEN_${SCHEDULE_ID}`,
+        contextMessageId: null,
       })
+    })
+
+    it('mengambil context.id saat balasan berasal dari message template', () => {
+      const payload = buildMetaPayload('KONFIRMS')
+      const message = payload.entry[0].changes[0].value.messages[0] as unknown as {
+        interactive: Record<string, unknown>
+      }
+      message.interactive.context = { id: 'wamid.TEMPLATE-1' }
+
+      expect(extractButtonMessage(payload)?.contextMessageId).toBe('wamid.TEMPLATE-1')
     })
 
     it('mengembalikan null untuk payload tanpa button_reply', () => {

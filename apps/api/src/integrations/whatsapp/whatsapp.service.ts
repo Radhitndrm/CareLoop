@@ -101,14 +101,21 @@ export function createWhatsAppService(options: WhatsAppServiceOptions): WhatsApp
   }
 }
 
-/** Memilih provider berdasarkan PROVIDER_MODE (CL-005). Mode `live` masih stub di CL-101. */
+/** Memilih provider berdasarkan PROVIDER_MODE (CL-005). */
 export function createWhatsAppServiceFromEnv(
-  env: Pick<Env, 'PROVIDER_MODE' | 'WHATSAPP_TOKEN' | 'WHATSAPP_PHONE_ID'> = getEnv(),
+  env: Pick<
+    Env,
+    'PROVIDER_MODE' | 'WHATSAPP_TOKEN' | 'WHATSAPP_PHONE_ID' | 'WHATSAPP_API_VERSION'
+  > = getEnv(),
 ): WhatsAppService {
   const provider: WhatsAppProvider =
     env.PROVIDER_MODE === 'mock'
       ? new MockWhatsAppProvider()
-      : new MetaCloudApiProvider({ token: env.WHATSAPP_TOKEN ?? '', phoneId: env.WHATSAPP_PHONE_ID ?? '' })
+      : new MetaCloudApiProvider({
+          token: env.WHATSAPP_TOKEN ?? '',
+          phoneId: env.WHATSAPP_PHONE_ID ?? '',
+          apiVersion: env.WHATSAPP_API_VERSION,
+        })
   return createWhatsAppService({ provider })
 }
 

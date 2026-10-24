@@ -2,9 +2,12 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../../lib/prisma'
 import { invalidTransition, notFound } from '../../lib/errors'
-import { authenticate, requireCareTeamRole, requireRole } from '../../lib/auth'
+import { authenticate, getAuthUser, requireCareTeamRole, requireRole } from '../../lib/auth'
 import { UserRole, escalationRespondSchema } from '@careloop/shared'
+import type { AuthUserClaims } from '@careloop/shared'
 import { handleEmergencyTimeout } from '../emergency/emergency.service'
+import { resolveNakesScope } from '../dashboard/dashboard.service'
+import { assertPatientInScope, type PatientsPrismaClient } from '../patients/patients.service'
 import {
   ACTIVE_ESCALATION_STATUSES,
   startEscalationRun,
@@ -90,6 +93,44 @@ const escalationStepsParamsSchema = z.object({
   runId: z.string().uuid(),
 })
 
+/**
+ * Siapa yang boleh menutup eskalasi seorang pasien.
+ *
+ * ADMIN: seluruh wilayah. NAKES: hanya puskesmas/district penugasannya.
+ * FAMILY/PATIENT: hanya kalau benar-benar keluarga atau pasien tersebut — bukan
+ * sekadar role-nya. Tanpa cek terakhir ini, anggota keluarga mana pun bisa menutup
+ * alarm pasien lain begitu tahu UUID-nya.
+ */
+async function assertCanRespondToEscalation(
+  client: any,
+  claims: AuthUserClaims,
+  patientId: string,
+): Promise<void> {
+  if (claims.role === 'ADMIN') return
+
+  if (claims.role === 'NAKES') {
+    await assertPatientInScope(client as unknown as PatientsPrismaClient, claims, patientId)
+    return
+  }
+
+  if (claims.role === 'PATIENT') {
+    if (claims.sub !== patientId) {
+      throw notFound('Escalation run tidak ditemukan')
+    }
+    return
+  }
+
+  // FAMILY: harus terdaftar sebagai kontak keluarga pasien ini.
+  const contact = await client.familyContact.findFirst({
+    where: { patientId, isActive: true, userId: claims.sub },
+    select: { id: true },
+  })
+
+  if (!contact) {
+    throw notFound('Escalation run tidak ditemukan')
+  }
+}
+
 export function registerEscalationRoutes(app: FastifyInstance): void {
   // GET /v1/escalations/active (docs/API.md §3.6).
   // Care team saja: run memuat NIK, livingSituation (jalur eskalasi darurat),
@@ -97,10 +138,16 @@ export function registerEscalationRoutes(app: FastifyInstance): void {
   app.get(
     '/v1/escalations/active',
     { preHandler: [authenticate, requireCareTeamRole()] },
-    async () => {
+    async (req) => {
+    // Filter scope WAJIB. Tanpa ini nakes di satu puskesmas bisa melihat run — beserta
+    // nomor HP keluarga yang menerima alert — dari seluruh Indonesia.
+    const claims = getAuthUser(req)
+    const scope = await resolveNakesScope(prisma as any, claims)
+
     const activeRuns = await prisma.escalationRun.findMany({
       where: {
         status: { in: ACTIVE_ESCALATION_STATUSES as any },
+        ...(scope.isAdmin ? {} : { patient: scope.patientFilter }),
       },
       include: {
         steps: {
@@ -156,6 +203,11 @@ export function registerEscalationRoutes(app: FastifyInstance): void {
     if (!run) {
       throw notFound(`Escalation run ${params.id} tidak ditemukan`)
     }
+
+    // Wajib periksa kewenangan: tanpa ini siapa pun yang tahu UUID run bisa menutup
+    // eskalasi pasien yang bukan miliknya — termasuk menandai "sudah ditangani"
+    // padahal alerting-nya dihentikan (AC-3.2).
+    await assertCanRespondToEscalation(prisma as any, getAuthUser(req), run.patientId)
 
     if (isTerminalStatus(run.status)) {
       throw invalidTransition(`Run eskalasi sudah dalam status final (${run.status})`)

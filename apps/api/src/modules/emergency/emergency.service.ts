@@ -17,7 +17,7 @@ import {
 } from '@careloop/shared'
 import { tryCreateAuditLog } from '../../lib/audit'
 import { notFound, invalidTransition } from '../../lib/errors'
-import { getWhatsAppService, type WhatsAppService } from '../../integrations/whatsapp'
+import { getWhatsAppService, buildPatientConfirmBody, type WhatsAppService } from '../../integrations/whatsapp'
 import {
   startEscalationRun,
   resolveEscalationRun,
@@ -181,7 +181,12 @@ export async function createEmergencyFromAnomaly(
 
   if (patientPhone) {
     try {
-      const waResult = await waService.sendText(patientPhone, waBody)
+      // Interaktif, bukan teks: "Apakah Anda aman?" harus bisa dijawab satu ketukan
+      // (FR-4.3 / AC-4.2). Tanpa tombol SAFE/NEED_HELP, konfirmasi hanya bisa lewat app.
+      const waResult = await waService.sendInteractive(
+        patientPhone,
+        buildPatientConfirmBody(waBody, emergencyAlert.id),
+      )
       waMessageId = waResult.providerMessageId
     } catch (err) {
       waError = err instanceof Error ? err.message : String(err)

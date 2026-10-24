@@ -1,0 +1,803 @@
+<mxfile host="app.diagrams.net" modified="2026-10-24T00:00:00.000Z" agent="opencode" version="24.0.0" type="device">
+  <diagram id="careloop-arch" name="1. Arsitektur Sistem">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p1_title" value="CareLoop — Arsitektur Sistem (Modular Monolith)" style="text;html=1;fontSize=20;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="280" y="20" width="560" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_mobile" value="Mobile App Pasien&#10;(React Native / Expo)&#10;Login OTP · Tab Confirm ·&#10;Emergency · Request Obat" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="180" width="200" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_wa" value="WhatsApp Channel&#10;mock/sandbox (dev) · Meta API (live)&#10;Tombol interaktif 1-tap&#10;[Sudah Minum] [Tunda] [Aman]&#10;[Butuh Bantuan] [Saya Tangani]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="290" y="180" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_web" value="Web Dashboard Nakes/Admin&#10;(Next.js)&#10;Login password · /dashboard ·&#10;/patients · /requests · /pharmacy ·&#10;/admin · /simulator" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="570" y="180" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_watch" value="Smartwatch&#10;(adapter mock / Google Fit)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="850" y="180" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_api" value="Fastify API (apps/api) — /v1/* · JWT · RBAC per peran" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="340" width="800" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_m_auth" value="auth&#10;(OTP · login)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="60" y="380" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_m_pat" value="patients&#10;(daftar · checklist)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="200" y="380" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_m_med" value="medications&#10;(resep DRAFT→APPROVED)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="340" y="380" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_m_fam" value="family&#10;(kontak eskalasi)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="500" y="380" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_m_dash" value="dashboard&#10;(KPI · alert · WS)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="640" y="380" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_m_rem" value="reminders&#10;(scheduler 60s)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="60" y="450" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_m_comp" value="compliance&#10;(konfirmasi 1-tap)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="200" y="450" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_m_esc" value="escalation&#10;(state machine)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="340" y="450" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_m_emg" value="emergency&#10;(alert darurat)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="500" y="450" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_m_vit" value="vitals&#10;(deteksi anomali)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="640" y="450" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_m_wh" value="webhook + wa-intents&#10;(verifikasi HMAC · dedup · dispatch)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="60" y="520" width="260" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_m_pharm" value="pharmacy&#10;(permintaan · antrean · serah obat)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="340" y="520" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_m_admin" value="admin · puskesmas · simulator&#10;· risk · education · export (stub)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="560" y="520" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_db" value="PostgreSQL&#10;(Prisma · timestamptz UTC)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="690" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_redis" value="Redis / BullMQ&#10;(job queue persisten — timeout restart-safe)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="280" y="690" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_waapi" value="WhatsApp Business API&#10;(provider eksternal)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="540" y="690" width="180" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_sock" value="Socket.IO&#10;(realtime nakes)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="850" y="380" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_note1" value="Hard constraint: tombol 112 HANYA deep-link manual (tel:) —&#10;tidak pernah auto-dial. Data pasien = sintetis/anonim." style="shape=note;whiteSpace=wrap;html=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacingLeft=4;" vertex="1" parent="1">
+          <mxGeometry x="850" y="470" width="290" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p1_mobile" target="p1_api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_e2" value="POST /webhooks/whatsapp" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p1_wa" target="p1_api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_e3" value="kirim pesan + button" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p1_api" target="p1_wa">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p1_web" target="p1_api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_e5" value="POST /v1/vitals" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p1_watch" target="p1_api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p1_api" target="p1_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p1_api" target="p1_redis">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p1_api" target="p1_waapi">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p1_api" target="p1_sock">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_e10" value="events: emergency.priority,&#10;escalation.step, compliance.updated" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p1_sock" target="p1_web">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="careloop-auth" name="2. Auth &amp; Onboarding">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p2_title" value="CareLoop — Alur Autentikasi &amp; Onboarding Pasien" style="text;html=1;fontSize=20;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="280" y="20" width="560" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_g1" value="PASIEN / KELUARGA — OTP via WhatsApp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="70" width="380" height="600" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_g2" value="NAKES / ADMIN — Password" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="460" y="70" width="380" height="640" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_g3" value="AKTIVASI PASIEN (oleh nakes)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="880" y="70" width="300" height="800" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_start" value="START&#10;User membuka aplikasi" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="500" y="110" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_dec" value="Peran?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="530" y="190" width="140" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_p1" value="Masukkan no. HP&#10;POST /v1/auth/otp/request&#10;(rate limit 1/30s · respons identik&#10;untuk nomor terdaftar/tidak)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="70" y="300" width="280" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_p2" value="OTP dikirim via WhatsApp&#10;(TTL 300s · mock = 123456)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="70" y="410" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_p3" value="POST /v1/auth/otp/verify&#10;(maks 5 percobaan · kode 1× pakai)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="70" y="500" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_p4" value="BERHASIL — JWT 24 jam&#10;disimpan di expo-secure-store" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="590" width="280" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_n1" value="POST /v1/auth/login&#10;telepon/email + password (bcrypt cost 12)&#10;JWT claims: sub, role, nakesRole" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="490" y="300" width="280" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_n2" value="BERHASIL — masuk /dashboard&#10;(scope: puskesmas/district assignments)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="490" y="410" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_n3" value="Admin: POST /v1/admin/nakes-accounts&#10;→ status INVITED + kode aktivasi 1×&#10;(hash · TTL 7 hari)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="490" y="500" width="280" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_n4" value="Staf: POST /v1/auth/activate&#10;(kode + password baru) → ACTIVE" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="490" y="610" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_r1" value="Nakes mendaftarkan pasien&#10;POST /v1/patients → status ONBOARDING&#10;(user PATIENT tanpa password — hanya OTP)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="900" y="300" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_r2" value="Checklist aktivasi lengkap?&#10;PUSKESMAS · CONSENT · WA TERVERIFKASI&#10;MINIMUM_DATA · KONTAK ESKALASI&#10;RESEP APPROVED · JADWAL AKTIF" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="910" y="410" width="240" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_r3" value="Lengkapi lewat work queue&#10;di /dashboard (bucket INCOMPLETE,&#10;UNVERIFIED, NO_ESCALATION_CONTACT, ...)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="900" y="560" width="260" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_r4" value="POST /v1/patients/:id/activate&#10;(DOKTER/BIDAN/ADMIN)&#10;→ status ACTIVE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="900" y="660" width="260" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_r5" value="Hanya pasien ACTIVE yang masuk&#10;loop reminder &amp; eskalasi (lihat hal. 3)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="900" y="760" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e1" value="Pasien / Keluarga" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_dec" target="p2_p1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e2" value="Nakes / Admin" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_dec" target="p2_n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_start" target="p2_dec">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_p1" target="p2_p2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_p2" target="p2_p3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_p3" target="p2_p4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_n1" target="p2_n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_n1" target="p2_n3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_n3" target="p2_n4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_n2" target="p2_r1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_r1" target="p2_r2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e12" value="Belum" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_r2" target="p2_r3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e13" value="Ya" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_r2" target="p2_r4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="p2_r3" target="p2_r2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_e15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2_r4" target="p2_r5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="careloop-reminder" name="3. Reminder &amp; Eskalasi">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p3_title" value="CareLoop — Alur Utama: Reminder WhatsApp → Konfirmasi 1-tap → Eskalasi Bertingkat" style="text;html=1;fontSize=20;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="380" y="8" width="760" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_gsys" value="SYSTEM / SCHEDULER (BullMQ persisten)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="320" height="1320" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_gwa" value="WHATSAPP CHANNEL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="50" width="280" height="400" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_gpat" value="PASIEN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="720" y="50" width="280" height="900" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_gapi" value="API — WEBHOOK &amp; COMPLIANCE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="50" width="360" height="1320" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_gesc" value="STATE MACHINE ESKALASI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#9673a6;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="50" width="320" height="1320" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_s1" value="Scheduler tick tiap 60 detik&#10;(job reminder-dispatcher)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="90" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_s2" value="Scan jadwal due:&#10;medication APPROVED + patient ACTIVE&#10;nextFireAt dalam horizon +10 menit" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="70" y="180" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_s3" value="Ada jadwal due?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="100" y="290" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_s4" value="Buat job &#39;reminder&#39; idempoten&#10;jobId = reminder:{scheduleId}:{dueAt}" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="70" y="420" width="260" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_s5" value="Buat EscalationRun (context SCHEDULE)&#10;status WAITING_PATIENT + job timeout&#10;ESCALATION_PATIENT_WAIT_SEC = 1800s" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="70" y="530" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_s6" value="Timeout reconciler — fire event TIMEOUT&#10;ke state machine (per tier, restart-safe)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="70" y="980" width="260" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_n_loop" value="Jika tidak ada due: tidak ada aksi,&#10;scheduler lanjut di tick berikutnya." style="shape=note;whiteSpace=wrap;html=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacingLeft=4;" vertex="1" parent="1">
+          <mxGeometry x="55" y="1230" width="270" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_w1" value="WhatsAppService kirim pesan&#10;&#39;Saatnya minum obat X dosis Y&#39;&#10;Tombol: [Sudah Minum] [Tunda 15 mnt]&#10;retry 3× → log reminder_logs" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="430" y="420" width="220" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_p1" value="Pasien menerima pesan&#10;di WhatsApp" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="750" y="420" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_p2" value="Aksi pasien?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="760" y="520" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_p3" value="Menekan [Sudah Minum]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="750" y="660" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_p4" value="Menekan [Tunda 15 mnt]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="750" y="750" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_p5" value="Diam — tidak merespons&#10;sampai batas waktu" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="750" y="840" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_a1" value="POST /webhooks/whatsapp&#10;verifikasi signature HMAC&#10;+ dedup msg-id (idempoten)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="660" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_a2" value="dispatchWaIntent&#10;cek schedule dimiliki pengirim" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="770" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_a3" value="Intent tombol?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="860" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_a4" value="compliance_logs INSERT&#10;CONFIRMED (dalam window) / CONFIRMED_LATE&#10;unique (schedule_id, scheduled_at) → idempoten" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="990" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_a4e" value="Kepatuhan tercatat ✓&#10;event PATIENT_CONFIRMED → eskalasi" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1110" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_a7" value="DEFER: jadwal + COMPLIANCE_DEFER_MINUTES&#10;(15 mnt) · EscalationRun tetap terbuka" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1220" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_e1" value="WAITING_PATIENT" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="530" width="260" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_e2" value="RESOLVED&#10;(resolution: PATIENT_CONFIRMED)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="660" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_e3" value="WAITING_FAMILY_TIER_1&#10;WA ke kontak tier-1: [Saya Tangani]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="820" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_e4" value="WAITING_FAMILY_TIER_2&#10;WA ke kontak tier-2" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="960" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_e5" value="WAITING_NAKES&#10;WA nakes/kader + dashboard WS&#10;(event escalation.step)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="1100" width="260" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_e6" value="TIMED_OUT&#10;(tidak ada yang merespons)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="1240" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_e7" value="HANDLED — keluarga/nakes menekan&#10;[Saya Tangani] (tier berikutnya dibatalkan)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="1320" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_n_skip" value="Tier tanpa kontak dilewati.&#10;emergencyPreference=NAKES_FIRST&#10;→ langsung ke nakes." style="shape=note;whiteSpace=wrap;html=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacingLeft=4;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="1220" width="240" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_s1" target="p3_s2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_s2" target="p3_s3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee3" value="Ya" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_s3" target="p3_s4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_s4" target="p3_w1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_w1" target="p3_p1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_s4" target="p3_s5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee7" value="run dibuat" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_s5" target="p3_e1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_p1" target="p3_p2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee9" value="Sudah minum" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_p2" target="p3_p3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee10" value="Tunda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_p2" target="p3_p4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee11" value="Diam" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_p2" target="p3_p5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee12" value="button_reply → webhook" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_p3" target="p3_a1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_a1" target="p3_a2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_a2" target="p3_a3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee15" value="CONFIRM_TAKEN" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_a3" target="p3_a4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_a4" target="p3_a4e">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee17" value="PATIENT_CONFIRMED" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_a4e" target="p3_e2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee18" value="DEFER" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_a3" target="p3_a7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee19" value="pengingat dikirim ulang nanti" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;" edge="1" parent="1" source="p3_a7" target="p3_s4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee20" value="timeout job fires" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_p5" target="p3_s6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee21" value="TIMEOUT&#10;(ESCALATION_PATIENT_WAIT_SEC)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_s6" target="p3_e3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee22" value="TIMEOUT 900s&#10;(FAMILY_TIER1_WAIT)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_e3" target="p3_e4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee23" value="TIMEOUT 900s&#10;(FAMILY_TIER2_WAIT)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_e4" target="p3_e5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee24" value="TIMEOUT 1800s&#10;(NAKES_WAIT)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_e5" target="p3_e6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee25" value="HANDLE" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_e3" target="p3_e7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee26" value="HANDLE" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_e4" target="p3_e7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ee27" value="HANDLE" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3_e5" target="p3_e7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="careloop-emergency" name="4. Deteksi Darurat">
+    <mxGraphModel dx="1600" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1520" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p4_title" value="CareLoop — Deteksi Anomali Smartwatch → Alert Darurat → Eskalasi" style="text;html=1;fontSize=20;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="420" y="8" width="680" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_gsys" value="SYSTEM — VITALS &amp; EMERGENCY" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="320" height="1420" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_gwa" value="WHATSAPP CHANNEL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="50" width="280" height="1420" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_gpat" value="PASIEN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="720" y="50" width="280" height="1100" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_gesc" value="STATE MACHINE ESKALASI + ALERT DARURAT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#9673a6;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="50" width="720" height="1420" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_v1" value="POST /v1/vitals&#10;(smartwatch adapter / mock-anomaly)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="90" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_v2" value="smartwatchEnabled?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="100" y="180" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_v2n" value="403 — vitals ditolak" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="290" width="260" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_v3" value="Simpan vitals&#10;dedup (patientId, source, recordedAt)&#10;sanitasi metadata hardware" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="70" y="370" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_v4" value="Anomali?&#10;HR &lt; 50 atau &gt; 120 bpm&#10;(ambang per pasien)&#10;≥ 2 bacaan dalam 60 detik" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="90" y="480" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_v4n" value="Normal — selesai" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="630" width="260" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_e1" value="Buat EmergencyAlert PENDING_PATIENT_CONFIRM&#10;+ EscalationRun (context EMERGENCY)&#10;audit: emergency.triggered" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="70" y="720" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_t1" value="Timeout 45 detik tanpa jawaban&#10;→ alert status ESCALATING" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="70" y="900" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_t2" value="Ambil lokasi GPS terakhir&#10;(LocationService)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="70" y="990" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_t3" value="livingSituation=ALONE atau&#10;emergencyPreference=NAKES_FIRST?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="90" y="1080" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_w1" value="WA: &#39;Apakah Anda aman?&#39;&#10;[Saya Aman] [Butuh Bantuan]&#10;jendela konfirmasi 45 detik (env 30–60)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="430" y="720" width="220" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_w2" value="WA ke SEMUA kontak keluarga (tier):&#10;nama + kondisi + link Google Maps&#10;+ [Saya Tangani] + [Telepon 112]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="430" y="1230" width="220" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_note112" value="Hard constraint: [Telepon 112] hanya&#10;deep-link tel: manual — TIDAK auto-dial." style="shape=note;whiteSpace=wrap;html=1;size=12;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=4;" vertex="1" parent="1">
+          <mxGeometry x="430" y="1340" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_p1" value="Pasien menerima&#10;alert darurat" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="750" y="720" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_p2" value="Jawab?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="760" y="810" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_p3" value="Menekan [Saya Aman]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="750" y="930" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_p4" value="Menekan [Butuh Bantuan]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="750" y="1010" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_p5" value="Tidak merespons" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="750" y="1090" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_a1" value="patient-response: SAFE&#10;→ alert RESOLVED_SAFE&#10;(false positive ditahan, keluarga tidak dihubungi)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="930" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_a2" value="patient-response: NEED_HELP&#10;→ langsung ESCALATING&#10;(lewati jendela konfirmasi pasien)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1400" y="930" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_f1" value="EmergencyAlert ESCALATING&#10;+ EscalationRun WAITING_PATIENT" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="200" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_f2" value="RESOLVED_SAFE (jalur aman)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="300" width="300" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_f3" value="WAITING_FAMILY_TIER_1&#10;(notif WA keluarga + tombol HANDLE)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1230" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_f4" value="WAITING_FAMILY_TIER_2" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1320" width="300" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_f5" value="WAITING_NAKES — WS emergency.priority&#10;ke dashboard nakes (alert prioritas)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1400" y="1230" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_f6" value="TIMED_OUT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1400" y="1320" width="300" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_f7" value="HANDLED — ada yang menekan [Saya Tangani]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1400" width="300" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_v1" target="p4_v2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee2" value="Tidak" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_v2" target="p4_v2n">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee3" value="Ya" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_v2" target="p4_v3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_v3" target="p4_v4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee5" value="Tidak" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_v4" target="p4_v4n">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee6" value="Ya" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_v4" target="p4_e1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_e1" target="p4_w1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_w1" target="p4_p1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee9" value="run dibuat" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;" edge="1" parent="1" source="p4_e1" target="p4_f1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_p1" target="p4_p2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee11" value="Aman" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_p2" target="p4_p3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee12" value="Butuh bantuan" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_p2" target="p4_p4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee13" value="Diam" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_p2" target="p4_p5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_p3" target="p4_a1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_p4" target="p4_a2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee16" value="eskalasi langsung" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_a2" target="p4_f3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_p5" target="p4_t1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_t1" target="p4_t2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_t2" target="p4_t3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee20" value="Ya" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_t3" target="p4_f5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee21" value="Tidak" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_t3" target="p4_w2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_w2" target="p4_f3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee23" value="TIMEOUT 45s&#10;(EMERGENCY_PATIENT_CONFIRM_SEC)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_f1" target="p4_f3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee24" value="SAFE → RESOLVED_SAFE" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_f1" target="p4_f2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee25" value="TIMEOUT 900s" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_f3" target="p4_f4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee26" value="TIMEOUT → nakes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_f4" target="p4_f5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee27" value="TIMEOUT 1800s" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_f5" target="p4_f6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee28" value="HANDLE" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_f3" target="p4_f7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_ee29" value="HANDLE" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4_f5" target="p4_f7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="careloop-pharmacy" name="5. Farmasi &amp; Refill Obat">
+    <mxGraphModel dx="1500" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1350" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p5_title" value="CareLoop — Alur Farmasi: Permintaan Refill Obat → Penyerahan" style="text;html=1;fontSize=20;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="320" y="8" width="620" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_g1" value="SUMBER PERMINTAAN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="360" height="800" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_g2" value="DOKTER / BIDAN (keputusan klinis)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#6c8ebf;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="440" y="50" width="300" height="980" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_g3" value="FARMASI (persiapan &amp; penyerahan)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#82b366;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="780" y="50" width="580" height="1250" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_r1" value="SUMBER ROUTINE — scheduler harian&#10;(pharmacy-routine-scheduler)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="90" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_r2" value="nextPickupAt ≤ PHARMACY_REFILL_LEAD_DAYS&#10;(3 hari) → buat request&#10;source=ROUTINE, status QUEUED langsung&#10;(resep sudah APPROVED)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="70" y="180" width="300" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_r3" value="SUMBER PATIENT_REQUEST — mobile&#10;(tab Request Obat)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="310" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_r4" value="Pasien ajukan: jumlah + alasan&#10;(EARLY_PICKUP / LOST / DAMAGED /&#10;EXTRA / OTHER) · patientId dari JWT" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="70" y="400" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_r5" value="Resep APPROVED &amp; aktif&#10;dan qty ≤ 90 hari?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="100" y="510" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_r5n" value="TOLAK — 422/400&#10;(resep tidak valid / qty melebihi batas)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="640" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_r6" value="Status: PENDING_DOCTOR&#10;menunggu keputusan dokter" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="70" y="730" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_d1" value="Dokter/Bidan review di /requests&#10;PATCH /v1/medication-requests/:id/decision" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="470" y="510" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_d2" value="Keputusan?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="490" y="630" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_d3" value="APPROVED (qty parsial opsional)&#10;→ status QUEUED&#10;WA ke pasien + keluarga aktif" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="470" y="750" width="240" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_d4" value="REJECTED — catatan wajib&#10;WA ke pasien + alasan" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="880" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_fq" value="QUEUED&#10;(antrean apotek)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="810" y="510" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_f1" value="START_PREPARING → PREPARING&#10;(Farmasi menyiapkan obat)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="810" y="610" width="240" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_f2" value="MARK_READY → READY&#10;WA: &#39;obat siap diambil&#39; ke pasien + keluarga" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="810" y="710" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_f3" value="Ada masalah stok / substitusi?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="820" y="830" width="220" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_f4" value="DISPENSED&#10;(wajib isi quantityDays)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="810" y="970" width="240" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_f5" value="SELESAI ✓&#10;buat DispensingRecord&#10;stok quantityRemaining −&#10;medication.nextPickupAt +" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="810" y="1080" width="240" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_foos" value="MARK_OUT_OF_STOCK (alasan wajib)&#10;→ OUT_OF_STOCK (final)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="830" width="240" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_fsub" value="MARK_SUBSTITUTED (alasan + nama obat)&#10;→ SUBSTITUTED&#10;dokter wajib setujui substitusi nanti" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="930" width="240" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_note" value="Pasien memantau status di tab&#10;My Requests (isOverdue = turunan, bukan status tersimpan).&#10;RBAC: FARMASI hanya boleh menyentuh /medication-requests* dan&#10;/dispensing-records — tidak bisa meresep/menyetujui." style="shape=note;whiteSpace=wrap;html=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacingLeft=4;" vertex="1" parent="1">
+          <mxGeometry x="810" y="1190" width="330" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_r1" target="p5_r2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee2" value="langsung QUEUED" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_r2" target="p5_fq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_r3" target="p5_r4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_r4" target="p5_r5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee5" value="Tidak" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_r5" target="p5_r5n">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee6" value="Ya" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_r5" target="p5_r6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_r6" target="p5_d1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_d1" target="p5_d2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee9" value="Approve" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_d2" target="p5_d3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee10" value="Reject" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_d2" target="p5_d4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_d3" target="p5_fq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_fq" target="p5_f1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_f1" target="p5_f2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_f2" target="p5_f3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee15" value="Stok habis" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_f3" target="p5_foos">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee16" value="Substitusi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_f3" target="p5_fsub">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee17" value="Normal" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_f3" target="p5_f4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5_f4" target="p5_f5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_ee19" value="RETURNED_TO_QUEUE&#10;(dari READY)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;" edge="1" parent="1" source="p5_f2" target="p5_fq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="careloop-dashboard" name="6. Dashboard Nakes">
+    <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p6_title" value="CareLoop — Alur Monitoring Nakes (Web Dashboard)" style="text;html=1;fontSize=20;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="220" y="8" width="520" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_g1" value="ALUR NAKES — /dashboard (Next.js + Socket.IO)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="180" y="50" width="600" height="1000" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_s1" value="START — Login /login&#10;(telepon/email + password → JWT)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="330" y="90" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_s2" value="GET /v1/dashboard/summary&#10;total pasien · tingkat kepatuhan ·&#10;darurat/escalation aktif · jumlah berisiko" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="330" y="180" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_s3" value="Perlu tindakan?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="400" y="290" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_a1" value="Grafik kepatuhan GET /dashboard/adherence&#10;(harian + per penyakit)&#10;filter: distrik · penyakit · rentang tanggal · status eskalasi" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="250" y="410" width="460" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_a2" value="Alert real-time (Socket.IO) + /dashboard/alerts&#10;events: emergency.priority · escalation.step ·&#10;compliance.updated · risk.updated — room per nakes/puskesmas/distrik" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="250" y="520" width="460" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_a3" value="Work queue GET /dashboard/work-queue&#10;bucket: INCOMPLETE · UNVERIFIED · NO_ESCALATION_CONTACT ·&#10;NO_APPROVED_MEDICATION · NO_ACTIVE_SCHEDULE ·&#10;ACTIVE_ESCALATION · OPEN_EMERGENCY" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="250" y="640" width="460" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_a4" value="Kelola pasien (/patients):&#10;daftar pasien baru → buat resep DRAFT →&#10;APPROVED (DOKTER/BIDAN) → buat jadwal →&#10;ceklist aktivasi → ACTIVE" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="250" y="770" width="460" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_a5" value="END — pasien ACTIVE masuk&#10;loop reminder &amp; eskalasi (lihat halaman 3)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="330" y="900" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_note" value="Risk list: GET /dashboard/risk-pasien (skor ≥ 70 / HIGH).&#10;Out-of-scope distrik → hasil kosong (bukan 403 — cegah kebocoran data)." style="shape=note;whiteSpace=wrap;html=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacingLeft=4;" vertex="1" parent="1">
+          <mxGeometry x="250" y="980" width="460" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_ee1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p6_s1" target="p6_s2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_ee2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p6_s2" target="p6_s3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_ee3" value="Tidak — pantau" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p6_s3" target="p6_a1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_ee4" value="Ya — ada alert" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p6_s3" target="p6_a2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_ee5" value="cek work queue onboarding" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p6_a1" target="p6_a3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_ee6" value="eskalasi ditangani / alert di-ack" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p6_a2" target="p6_a3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_ee7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p6_a3" target="p6_a4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_ee8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p6_a4" target="p6_a5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

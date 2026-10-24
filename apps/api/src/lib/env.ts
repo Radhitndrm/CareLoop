@@ -21,6 +21,16 @@ export const envSchema = z
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
 
+    /**
+     * Menyalakan WhatsApp Simulator & endpoint `/v1/dev/whatsapp/*`.
+     * Default aktif di development/test, mati di production (lihat superRefine) supaya
+     * panel demo tidak bisa terpasang diam-diam di produksi.
+     */
+    SIMULATOR_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
+
     // Database
     DATABASE_URL: z.string().min(1, 'DATABASE_URL wajib diisi'),
     /** Koneksi langsung (non-pooler) untuk prisma migrate — dipakai Supabase. */
@@ -55,6 +65,23 @@ export const envSchema = z
     PROVIDER_MODE: z.enum(['mock', 'live']).default('mock'),
     WHATSAPP_TOKEN: z.string().optional(),
     WHATSAPP_PHONE_ID: z.string().optional(),
+    /** Versi Graph API untuk Cloud API. Default v21.0. */
+    WHATSAPP_API_VERSION: z.string().regex(/^v\d+\.\d+$/, 'WHATSAPP_API_VERSION harus seperti v26.0').default('v26.0'),
+    /**
+     * Nama message template Meta untuk pengingat obat proaktif. Wajib template yang
+     * berstatus APPROVED di Meta — pesan di luar jendela 24 jam hanya boleh lewat template.
+     * Lihat docs/WHATSAPP-SETUP.md §1 & §4.
+     */
+    WHATSAPP_REMINDER_TEMPLATE: z.string().min(1).max(512).default('pengingat_obat'),
+    /**
+     * Payload tombol quick-reply pada template pengingat.
+     *
+     * `KONFIRMS` (default, untuk produksi): payload konstan. CareLoop lalu mengirim
+     * pesan lanjutan berisi tombol interaktif `CONFIRM_TAKEN_<scheduleId>` yang
+     * sesungguhnya — satu template cukup untuk semua jadwal.
+     * `CONFIRM_TAKEN`: payload membawa id jadwal, tapi butuh satu template per jadwal.
+     */
+    WHATSAPP_REMINDER_TEMPLATE_BUTTON: z.enum(['KONFIRMS', 'CONFIRM_TAKEN']).default('KONFIRMS'),
     WA_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
     WA_APP_SECRET: z.string().optional(),
 
@@ -141,6 +168,15 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['DIRECT_URL'],
         message: 'DIRECT_URL wajib diisi di production untuk `prisma migrate deploy` (koneksi non-pooler)',
+      })
+    }
+
+    if (value.NODE_ENV === 'production' && value.SIMULATOR_ENABLED) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['SIMULATOR_ENABLED'],
+        message:
+          'SIMULATOR_ENABLED wajib=false di production — simulator memakai MockWhatsAppProvider dan tidak boleh aktif di sana',
       })
     }
 

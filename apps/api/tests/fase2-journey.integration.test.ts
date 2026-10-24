@@ -301,6 +301,23 @@ describe('CL-214: Integration Test Fase 2 (M2 Darurat & Dashboard)', () => {
     if (prisma.nakesAssignment) {
       vi.spyOn(prisma.nakesAssignment as any, 'findMany').mockImplementation(async () => db.nakesAssignments)
     }
+    // Route eskalasi & darurat memverifikasi scope pasien sebelum menampilkan/menutup run.
+    // Mock ini mencerminkan aturan itu: patient ketemu HANYA kalau district-nya cocok
+    // dengan penugasan nakes.
+    if ((prisma as any).patient) {
+      vi.spyOn(prisma.patient as any, 'findFirst').mockImplementation(async ({ where }: any) => {
+        const clauses: any[] = where?.AND ?? []
+        const idClause = clauses.find((c: any) => c?.id) ?? (where?.id ? where : null)
+        const districtClause = clauses.find((c: any) => c?.districtCode)
+        const patient = db.patients.find((p: any) => (idClause?.id ? p.id === idClause.id : true))
+        if (!patient) return null
+        if (districtClause) {
+          const allowed: string[] = districtClause.districtCode?.in ?? []
+          if (!allowed.includes(patient.districtCode)) return null
+        }
+        return { id: patient.id }
+      })
+    }
   })
 
   // =========================================================================

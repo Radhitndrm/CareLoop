@@ -8,18 +8,44 @@ import {
 } from '@careloop/shared'
 import { runOnce } from '../../lib/idempotency'
 import { createAuditLog, type AuditLogClient } from '../../lib/audit'
+import { getReminderJobQueue } from '../reminders/reminder.queue'
+import { dispatchWaIntent, type WaIntentPrismaClient } from '../wa-intents'
 import {
   parseButtonReply,
+  TemplateConfirmButtonId,
   WaButtonIntent,
   type ParsedButtonReply,
 } from '../../integrations/whatsapp/parser'
+import { sendReminderConfirmButtons } from '../reminders/reminder.buttons'
+import { getWhatsAppService } from '../../integrations/whatsapp/whatsapp.service'
 
-export type WebhookPrismaClient = Pick<PrismaClient, 'notification' | 'auditLog'> & AuditLogClient
+/**
+ * Webhook butuh tiga hal sekaligus: dedup+catatan notifikasi (`notification`),
+ * audit (`auditLog`), dan tabel domain yang disentuh dispatcher intent (CL-112).
+ */
+export type WebhookPrismaClient = Pick<PrismaClient, 'notification' | 'auditLog'> &
+  AuditLogClient &
+  WaIntentPrismaClient
 
 export interface WebhookProcessResult {
   processed: boolean
   intent: string | null
   resourceId: string | null
+  /** Hasil domain dari dispatcher; null bila tidak ada intent/resource untuk diproses. */
+  dispatch: {
+    outcome: string
+    resourceType: string
+    resourceId: string
+    details: Record<string, unknown>
+  } | null
+  /**
+   * Error domain (409/403/422) yang sengaja tidak dilempar keluar.
+   *
+   * Balasan yang sudah diproses atau datang dari nomor yang salah akan selalu ditolak
+   * dengan cara yang sama, jadi mengembalikan 500 hanya membuat Meta mengirim ulang
+   * payload yang memang tidak akan pernah berhasil.
+   */
+  dispatchError: { code: string; message: string } | null
 }
 
 export function computeHubSignature(rawBody: Buffer, secret: string): string {
@@ -51,6 +77,14 @@ export interface ExtractedMessage {
   id: string
   from: string
   replyId: string | undefined
+  /**
+   * Id pesan yang dijawab (`interactive.context.id`).
+   *
+   * Ini satu-satunya cara memetakan balasan tombol di dalam message template kembali
+   * ke jadwal tertentu: payload quick-reply bersifat tetap di Meta, jadi tidak bisa
+   * membawa `scheduleId`. `context.id` menunjuk ke `reminder_logs.providerMessageId`.
+   */
+  contextMessageId: string | null
 }
 
 export function extractButtonMessage(payload: unknown): ExtractedMessage | null {
@@ -70,10 +104,13 @@ export function extractButtonMessage(payload: unknown): ExtractedMessage | null 
   if (interactive?.type !== 'button_reply') return null
   const buttonReply = interactive.button_reply as Record<string, unknown> | undefined
 
+  const context = interactive.context as Record<string, unknown> | undefined
+
   return {
     id: String(m.id),
     from: String(m.from),
     replyId: buttonReply?.id ? String(buttonReply.id) : undefined,
+    contextMessageId: context?.id ? String(context.id) : null,
   }
 }
 
@@ -140,7 +177,7 @@ export async function processWebhookMessage(
   const payload = JSON.parse(rawBody.toString('utf8')) as unknown
   const message = extractButtonMessage(payload)
   if (!message || !message.replyId) {
-    return { processed: true, intent: null, resourceId: null }
+    return { processed: true, intent: null, resourceId: null, dispatch: null, dispatchError: null }
   }
 
   const parsed: ParsedButtonReply | null = parseButtonReply(message.replyId)
@@ -148,7 +185,11 @@ export async function processWebhookMessage(
   const resourceId = parsed?.resourceId ?? null
 
   const dedup = await runOnce({
-    constraint: 'Notification_providerMessageId_key',
+    // Nama KOLOM, bukan nama index. Prisma melaporkan `meta.target` sebagai kolom yang
+    // melanggar (diverifikasi terhadap P2002), sedangkan nama index
+    // `Notification_providerMessageId_key` tidak pernah muncul di sana — kalau dipakai,
+    // setiap kiriman ganda akan dilempar sebagai error dan Meta mengulang tanpa henti.
+    constraint: 'providerMessageId',
     create: () =>
       prisma.notification.create({
         data: {
@@ -167,7 +208,7 @@ export async function processWebhookMessage(
   })
 
   if (!dedup.created) {
-    return { processed: false, intent, resourceId }
+    return { processed: false, intent, resourceId, dispatch: null, dispatchError: null }
   }
 
   if (intent) {
@@ -179,5 +220,89 @@ export async function processWebhookMessage(
     })
   }
 
-  return { processed: true, intent, resourceId }
+  // Balasan quick-reply pada message template (`KONFIRMS`): bukan intent bisnis, tapi
+  // sinyal bahwa jendela 24 jam sudah terbuka dan CareLoop boleh mengirim tombol
+  // konfirmasi yang sesungguhnya. Ditangani sebelum cabang intent biasa.
+  if (message.replyId === TemplateConfirmButtonId) {
+    const buttons = await sendReminderConfirmButtons(
+      prisma as any,
+      getWhatsAppService(),
+      { contextMessageId: message.contextMessageId, from: message.from },
+    )
+
+    await createAuditLog(prisma, {
+      action: AuditAction.REMINDER_SENT,
+      resourceType: 'schedule',
+      resourceId: buttons.scheduleId,
+      meta: {
+        messageId: message.id,
+        from: message.from,
+        contextMessageId: message.contextMessageId,
+        sent: buttons.sent,
+        reason: buttons.reason,
+      },
+    })
+
+    return {
+      processed: true,
+      intent: null,
+      resourceId: buttons.scheduleId,
+      dispatch: buttons.sent
+        ? {
+            outcome: 'CONFIRM_BUTTONS_SENT',
+            resourceType: 'schedule',
+            resourceId: buttons.scheduleId as string,
+            details: { alreadySent: buttons.alreadySent },
+          }
+        : null,
+      dispatchError: buttons.sent
+        ? null
+        : {
+            code: 'CONFIRM_BUTTONS_NOT_SENT',
+            message: buttons.reason ?? 'Tombol konfirmasi tidak terkirim',
+          },
+    }
+  }
+
+  // CL-112: tombol yang ditekan baru benar-benar mengubah state di sini.
+  if (!intent || !resourceId) {
+    return { processed: true, intent, resourceId, dispatch: null, dispatchError: null }
+  }
+
+  try {
+    const result = await dispatchWaIntent(
+      { prisma, reminderQueue: getReminderJobQueue() },
+      {
+        intent,
+        resourceId,
+        actorPhone: message.from,
+        sourceMessageId: message.id,
+      },
+    )
+
+    return {
+      processed: true,
+      intent,
+      resourceId,
+      dispatch: {
+        outcome: result.outcome,
+        resourceType: result.resourceType,
+        resourceId: result.resourceId,
+        details: result.details,
+      },
+      dispatchError: null,
+    }
+  } catch (err: unknown) {
+    const error = err as { code?: string; message?: string; statusCode?: number }
+    return {
+      processed: true,
+      intent,
+      resourceId,
+      dispatch: null,
+      dispatchError: {
+        code: error.code ?? 'WA_INTENT_REJECTED',
+        message: error.message ?? 'Intent tidak dapat diproses',
+      },
+    }
+  }
 }

@@ -46,6 +46,11 @@ export function useWorkspaceNav(): { nav: NavItem[]; roleLabel: string } {
         { href: '/pharmacy/dispensing', label: 'Penyerahan', icon: 'pharmacy', group: 'Obat' },
       )
     }
+    // Simulator menampilkan nomor HP & isi pesan pasien, jadi mengikuti gate yang sama dengan
+    // dashboard: apotek tidak diberi tautannya.
+    if (!isPharmacist && process.env.NODE_ENV !== 'production') {
+      nav.push({ href: '/simulator', label: 'Simulator', icon: 'simulator', group: 'Sistem' })
+    }
     if (user?.role === 'ADMIN') {
       nav.push(
         { href: '/admin/nakes', label: 'Kelola Nakes', icon: 'nakes', group: 'Sistem' },

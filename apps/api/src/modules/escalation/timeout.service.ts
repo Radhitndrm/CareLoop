@@ -89,6 +89,11 @@ export interface FamilyAlertMessageInput {
   scheduledTime?: string
   tier: EscalationTier
   instructions: string
+  /**
+   * Id run eskalasi. Wajib: dipakai membangun tombol "Saya Tangani" (`HANDLE_<runId>`)
+   * supaya keluarga bisa menutup eskalasi dari WhatsApp tanpa menghubungi nakes.
+   */
+  runId: string
 }
 
 export interface NakesAlertMessageInput {
@@ -99,6 +104,8 @@ export interface NakesAlertMessageInput {
   medicationName?: string
   scheduledTime?: string
   instructions: string
+  /** Id run eskalasi — sumber tombol "Saya Tangani". Lihat `FamilyAlertMessageInput.runId`. */
+  runId: string
 }
 
 export interface EscalationNotifier {
@@ -402,6 +409,7 @@ export async function handleEscalationTimeout(
         patientPhone,
         tier: updatedRun.currentTier ?? 'TIER_1',
         instructions,
+        runId: run.id,
       })
 
       // Catat ke tabel Notification
@@ -491,6 +499,7 @@ export async function handleEscalationTimeout(
             patientName,
             patientPhone,
             instructions,
+            runId: run.id,
           })
           providerMessageId = sendResult.providerMessageId
         } else {
@@ -501,6 +510,7 @@ export async function handleEscalationTimeout(
             patientPhone,
             tier: 'NAKES',
             instructions,
+            runId: run.id,
           })
           providerMessageId = sendResult.providerMessageId
         }

@@ -126,7 +126,12 @@ export interface ResolveEscalationRunInput {
 
 export interface HandleEscalationRunInput {
   runId: string
-  actorUserId: string
+  /**
+   * Aktor penangani. `null` sah untuk kontak yang belum punya akun `users`
+   * (mis. keluarga yang cuma disimpan sebagai nomor HP) — yang penting run tetap
+   * tercatat ditangani, bukan diisi dengan id orang lain.
+   */
+  actorUserId: string | null
   actorRole: 'FAMILY' | 'NAKES'
   notes?: string | null
 }

@@ -20,6 +20,7 @@
 import type { FastifyInstance } from 'fastify'
 import { EscalationContext, EscalationRunStatus } from '@careloop/shared'
 import { getWhatsAppService, type WhatsAppService } from '../../integrations/whatsapp/whatsapp.service'
+import { buildFamilyAlertBody, buildNakesAlertBody } from '../../integrations/whatsapp/templates'
 import { getEnv } from '../../lib/env'
 import { prisma } from '../../lib/prisma'
 import { createJobQueue, registerQueueLifecycle, type JobQueue, type QueueMode } from '../../lib/queue'
@@ -70,24 +71,48 @@ export class WhatsAppEscalationNotifier implements EscalationNotifier {
   constructor(private readonly whatsapp: WhatsAppService = getWhatsAppService()) {}
 
   async sendFamilyAlert(input: FamilyAlertMessageInput): Promise<{ providerMessageId: string | null }> {
-    const { body } = formatFamilyAlertMessage({
+    const { body, instructions } = formatFamilyAlertMessage({
       patientName: input.patientName,
       patientPhone: input.patientPhone,
       medicationName: input.medicationName,
       scheduledTime: input.scheduledTime,
     })
-    const result = await this.whatsapp.sendText(input.contactPhone, body)
+    // Interaktif, bukan teks: tanpa tombol "Saya Tangani" keluarga tidak punya cara
+    // menutup eskalasi dari WhatsApp (AC-7.x) dan dispatcher HANDLE jadi tak terjangkau.
+    const result = await this.whatsapp.sendInteractive(
+      input.contactPhone,
+      buildFamilyAlertBody(
+        {
+          patientName: input.patientName,
+          context: body,
+          instruction: instructions,
+          showCall112: false,
+        },
+        input.runId,
+      ),
+    )
     return { providerMessageId: result.providerMessageId }
   }
 
   async sendNakesAlert(input: NakesAlertMessageInput): Promise<{ providerMessageId: string | null }> {
-    const { body } = formatNakesEscalationAlertMessage({
+    const { body, instructions } = formatNakesEscalationAlertMessage({
       patientName: input.patientName,
       patientPhone: input.patientPhone,
       medicationName: input.medicationName,
       scheduledTime: input.scheduledTime,
     })
-    const result = await this.whatsapp.sendText(input.contactPhone, body)
+    const result = await this.whatsapp.sendInteractive(
+      input.contactPhone,
+      buildNakesAlertBody(
+        {
+          patientName: input.patientName,
+          context: body,
+          instruction: instructions,
+          showCall112: true,
+        },
+        input.runId,
+      ),
+    )
     return { providerMessageId: result.providerMessageId }
   }
 }

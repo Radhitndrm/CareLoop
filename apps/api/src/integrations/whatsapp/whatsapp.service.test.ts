@@ -133,17 +133,29 @@ describe('createWhatsAppServiceFromEnv — pemilihan provider (CL-005)', () => {
       PROVIDER_MODE: 'mock',
       WHATSAPP_TOKEN: undefined,
       WHATSAPP_PHONE_ID: undefined,
+      WHATSAPP_API_VERSION: 'v26.0',
     })
     expect(service.provider.name).toBe('mock-whatsapp')
   })
 
-  it('PROVIDER_MODE=live → stub MetaCloudApiProvider yang menolak kirim (ditunda)', async () => {
+  it('PROVIDER_MODE=live → MetaCloudApiProvider, dan konfigurasi kosong ditolak', () => {
     const service = createWhatsAppServiceFromEnv({
       PROVIDER_MODE: 'live',
       WHATSAPP_TOKEN: 'token',
       WHATSAPP_PHONE_ID: '123456',
+      WHATSAPP_API_VERSION: 'v26.0',
     })
     expect(service.provider.name).toBe('meta-cloud-api')
-    await expect(service.sendText('6281200000009', 'x')).rejects.toBeInstanceOf(WhatsAppSendError)
+
+    // Token/phone id kosong harus meledak saat pembuatan service — bukan diam-diam
+    // mengirim request tanpa autentikasi ke Graph API.
+    expect(() =>
+      createWhatsAppServiceFromEnv({
+        PROVIDER_MODE: 'live',
+        WHATSAPP_TOKEN: '',
+        WHATSAPP_PHONE_ID: '123456',
+        WHATSAPP_API_VERSION: 'v26.0',
+      }),
+    ).toThrow(WhatsAppSendError)
   })
 })

@@ -17,6 +17,7 @@ import { registerRiskRoutes } from './modules/risk'
 import { registerExportRoutes } from './modules/export'
 import { registerWebhookRoutes } from './modules/webhook'
 import { registerPuskesmasRoutes } from './modules/puskesmas'
+import { registerSimulatorRoutes } from './modules/simulator'
 
 export function registerRoutes(app: FastifyInstance): void {
   registerAuthRoutes(app)
@@ -37,4 +38,6 @@ export function registerRoutes(app: FastifyInstance): void {
   registerRiskRoutes(app)
   registerExportRoutes(app)
   registerWebhookRoutes(app)
+  // Simulator demo — route-nya sendiri menolak jalan bila SIMULATOR_ENABLED=false.
+  registerSimulatorRoutes(app)
 }
