@@ -17,11 +17,11 @@ export function BrandMark({ className }: { className?: string }) {
  */
 export function BrandLockup({ caption }: { caption?: string }) {
   return (
-    <Link href="/dashboard" className="brand-lockup" aria-label="CareLoop, beranda">
+    <Link href="/dashboard" className="brand-lockup shrink-0" aria-label="CareLoop, beranda">
       <BrandMark />
-      <span className="hidden min-w-0 sm:block">
+      <span className="hidden min-w-0 sm:flex sm:flex-col justify-center">
         <span className="brand-name block">CareLoop</span>
-        <span className="brand-caption block truncate">
+        <span className="brand-caption hidden xl:block truncate max-w-50">
           {caption ?? 'Monitoring Kepatuhan & Darurat'}
         </span>
       </span>
