@@ -15,6 +15,7 @@ describe('Emergency Routes (CL-204)', () => {
     const { buildApp } = await import('../../app')
     app = await buildApp({ logger: false, enableWs: false })
     vi.spyOn(prisma, '$transaction').mockImplementation(async (cb: any) => cb(prisma))
+    vi.spyOn(prisma.nakesAssignment, 'findMany').mockResolvedValue([] as any)
   })
 
   // Semua route darurat kini bertoken. Nakes dipakai sebagai aktor default;
